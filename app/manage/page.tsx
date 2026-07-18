@@ -20,19 +20,18 @@ export default function ManagePage() {
   };
 
   // 読み取り成功時の処理
-  const onScanSuccess = (text: string) => {
+ const onScanSuccess = (text: string) => {
     // 連続で読み取らないようにフラグで制御
     if (scannedRef.current) return;
     scannedRef.current = true;
 
-    setFormData({ ...formData, barcode: text });
+    setFormData((prev) => ({ ...prev, barcode: text }));
     setIsScanning(false);
-    alert('バーコードを読み取りました: ' + text);
     
     // 少し待ってからフラグを戻す
     setTimeout(() => {
         scannedRef.current = false;
-    }, 1000);
+    }, 500);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
