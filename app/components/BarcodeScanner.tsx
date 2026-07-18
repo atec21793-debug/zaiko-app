@@ -4,32 +4,26 @@ import { Html5Qrcode } from 'html5-qrcode';
 
 export default function BarcodeScanner({ onScan }: { onScan: (text: string) => void }) {
   useEffect(() => {
-    // ID "reader" の要素を作成
-    const config = { fps: 10, qrbox: { width: 250, height: 100 } };
+    // 枠のサイズを大きく設定 (width: 300, height: 200)
+    const config = { 
+      fps: 15, 
+      qrbox: { width: 300, height: 150 },
+      aspectRatio: 1.0
+    };
+    
     const html5QrCode = new Html5Qrcode("reader");
 
-    // 背面カメラ(environment)を指定して起動
+    // facingMode: "environment" (背面カメラ) を推奨
     html5QrCode.start(
-      { facingMode: { exact: "environment" } },
+      { facingMode: "environment" },
       config,
       (decodedText) => {
         onScan(decodedText);
-        html5QrCode.stop();
+        html5QrCode.stop().catch(() => {});
       },
-      (errorMessage) => {
-        // 読み取り中のエラーは無視
-      }
+      () => {}
     ).catch((err) => {
-      // 背面カメラがない場合、デフォルトのカメラで再試行
-      html5QrCode.start(
-        { facingMode: "user" },
-        config,
-        (decodedText) => {
-          onScan(decodedText);
-          html5QrCode.stop();
-        },
-        () => {}
-      ).catch((err) => console.error("カメラ起動失敗:", err));
+      console.error("カメラ起動エラー:", err);
     });
 
     return () => {
@@ -39,5 +33,17 @@ export default function BarcodeScanner({ onScan }: { onScan: (text: string) => v
     };
   }, [onScan]);
 
-  return <div id="reader" className="w-full"></div>;
+  return (
+    <div className="w-full overflow-hidden rounded-lg border-2 border-blue-500">
+      <div id="reader" className="w-full"></div>
+      <style jsx global>{`
+        #reader__scan_region {
+          width: 100% !important;
+        }
+        #reader__dashboard_section {
+          display: none; /* 余計なボタンを非表示にしてスッキリさせる */
+        }
+      `}</style>
+    </div>
+  );
 }

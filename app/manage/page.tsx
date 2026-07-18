@@ -59,26 +59,26 @@ export default function ManagePage() {
     }
   };
 
-  return (
-    <main className="p-4">
-      <h1 className="text-2xl font-bold mb-4">材料登録</h1>
-      <hr className="mb-4" />
+ return (
+  <main className="p-4">
+    <h1 className="text-2xl font-bold mb-4">材料登録</h1>
+    <hr className="mb-4" />
 
-      {/* バーコード読み取りボタン / スキャナー表示エリア */}
-      {isScanning ? (
-        <div className="mb-8">
-          <BarcodeScanner onScan={onScanSuccess} />
-          <button onClick={() => setIsScanning(false)} className="w-full mt-2 bg-red-600 text-white p-2 rounded">キャンセル</button>
-        </div>
-      ) : (
-        // --- 【修正箇所】スキャン中でない場合にボタンを表示する else ブロックを追加 ---
-        <button 
-          onClick={() => setIsScanning(true)}
-          className="w-full bg-gray-700 text-white p-6 rounded-xl font-bold text-xl shadow-lg mb-8"
-        >
-          バーコード読み取り
-        </button>
-      )}
+    {/* 【高速化】カメラを常にレンダリングしておき、表示・非表示を切り替える */}
+    <div className={isScanning ? "block mb-8" : "hidden"}>
+      <BarcodeScanner onScan={onScanSuccess} />
+      <button onClick={() => setIsScanning(false)} className="w-full mt-2 bg-red-600 text-white p-2 rounded">キャンセル</button>
+    </div>
+
+    {/* ボタン：スキャン中でない時だけ表示 */}
+    {!isScanning && (
+      <button 
+        onClick={() => setIsScanning(true)}
+        className="w-full bg-gray-700 text-white p-6 rounded-xl font-bold text-xl shadow-lg mb-8"
+      >
+        バーコード読み取り
+      </button>
+    )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <input type="text" placeholder="JANコード" className="w-full p-3 border rounded-lg" value={formData.barcode} onChange={(e) => setFormData({...formData, barcode: e.target.value})} required />
