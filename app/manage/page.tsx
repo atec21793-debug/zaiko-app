@@ -19,6 +19,11 @@ export default function ManagePage() {
     setPrices({ ...prices, [store]: value });
   };
 
+  const onScanSuccess = (text: string) => {
+    setFormData({ ...formData, barcode: text });
+    setIsScanning(false);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -57,9 +62,24 @@ export default function ManagePage() {
   return (
     <main className="p-4">
       <h1 className="text-2xl font-bold mb-4">材料登録</h1>
-      
-      {/* (スキャナー部分はそのまま) */}
-      
+      <hr className="mb-4" />
+
+      {/* バーコード読み取りボタン / スキャナー表示エリア */}
+      {isScanning ? (
+        <div className="mb-8">
+          <BarcodeScanner onScan={onScanSuccess} />
+          <button onClick={() => setIsScanning(false)} className="w-full mt-2 bg-red-600 text-white p-2 rounded">キャンセル</button>
+        </div>
+      ) : (
+        // --- 【修正箇所】スキャン中でない場合にボタンを表示する else ブロックを追加 ---
+        <button 
+          onClick={() => setIsScanning(true)}
+          className="w-full bg-gray-700 text-white p-6 rounded-xl font-bold text-xl shadow-lg mb-8"
+        >
+          バーコード読み取り
+        </button>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-4">
         <input type="text" placeholder="JANコード" className="w-full p-3 border rounded-lg" value={formData.barcode} onChange={(e) => setFormData({...formData, barcode: e.target.value})} required />
         <input type="text" placeholder="材料名" className="w-full p-3 border rounded-lg" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} required />
