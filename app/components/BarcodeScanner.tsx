@@ -4,18 +4,26 @@ import { Html5Qrcode } from 'html5-qrcode';
 
 export default function BarcodeScanner({ onScan }: { onScan: (text: string) => void }) {
   useEffect(() => {
-    // 枠のサイズを大きく設定 (width: 300, height: 200)
+    // 1. qrboxを画面幅に合わせて大きめに設定
+    // 2. 読み取り速度を上げるためfpsを少し高めに設定
     const config = { 
-      fps: 15, 
-      qrbox: { width: 300, height: 150 },
-      aspectRatio: 1.0
+      fps: 20, 
+      qrbox: { width: 350, height: 200 }, // 枠を大きくしました
+      aspectRatio: 1.0,
+      disableFlip: false 
     };
     
     const html5QrCode = new Html5Qrcode("reader");
 
-    // facingMode: "environment" (背面カメラ) を推奨
+    // iPhoneでの高速起動のため、constraintsで解像度を640pxに固定します
+    const cameraConfig = {
+      facingMode: { ideal: "environment" },
+      width: { ideal: 640 },
+      height: { ideal: 480 }
+    };
+
     html5QrCode.start(
-      { facingMode: "environment" },
+      cameraConfig,
       config,
       (decodedText) => {
         onScan(decodedText);
@@ -34,14 +42,16 @@ export default function BarcodeScanner({ onScan }: { onScan: (text: string) => v
   }, [onScan]);
 
   return (
-    <div className="w-full overflow-hidden rounded-lg border-2 border-blue-500">
+    <div className="w-full relative">
       <div id="reader" className="w-full"></div>
+      {/* CSSで読み取り領域をさらに広げる */}
       <style jsx global>{`
         #reader__scan_region {
           width: 100% !important;
+          background-color: transparent !important;
         }
-        #reader__dashboard_section {
-          display: none; /* 余計なボタンを非表示にしてスッキリさせる */
+        #reader__scan_region img {
+          display: none !important;
         }
       `}</style>
     </div>
