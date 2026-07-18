@@ -21,17 +21,20 @@ export default function ManagePage() {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const { error: prodError } = await supabase.from('products').insert([{
-      barcode: formData.barcode,
-      name: formData.name,
-      model_number: formData.model_number
-    }]);
-    const { error: priceError } = await supabase.from('unit_prices').insert([{
-      barcode: formData.barcode,
-      store_name: formData.store_name,
-      price: parseFloat(formData.price)
-    }]);
+  e.preventDefault();
+
+  // .insert() ではなく .upsert() を使用する
+  const { error: prodError } = await supabase.from('products').upsert([{
+    barcode: formData.barcode,
+    name: formData.name,
+    model_number: formData.model_number
+  }]);
+
+  const { error: priceError } = await supabase.from('unit_prices').upsert([{
+    barcode: formData.barcode,
+    store_name: formData.store_name,
+    price: parseFloat(formData.price)
+  }]);
 
     if (prodError || priceError) {
       alert('登録失敗: ' + (prodError?.message || priceError?.message));
