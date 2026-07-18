@@ -6,25 +6,26 @@ export default function BarcodeScanner({ onScan }: { onScan: (text: string) => v
   const scannerRef = useRef<Html5Qrcode | null>(null);
 
   useEffect(() => {
-    // 枠を広めに設定
-    const config = { fps: 10, qrbox: { width: 300, height: 150 } };
-    
-    // インスタンス作成
+    // 枠サイズを大きめに設定
+    const config = { fps: 15, qrbox: { width: 300, height: 150 } };
     const html5QrCode = new Html5Qrcode("reader");
     scannerRef.current = html5QrCode;
 
-    // 起動：iPhoneのSafari対策として解像度をあえて指定しない
+    // 解像度を落として負荷を激減させる設定
+    const cameraConfig = {
+      facingMode: "environment",
+      width: { ideal: 640 },
+      height: { ideal: 480 }
+    };
+
     html5QrCode.start(
-      { facingMode: "environment" },
+      cameraConfig,
       config,
       (text) => {
         onScan(text);
       },
       () => {}
-    ).catch((err) => {
-      console.error("スキャナーエラー:", err);
-      // 起動失敗時に画面をリロードせず、ユーザーに通知するだけにする
-    });
+    ).catch((err) => console.log("カメラ起動エラー:", err));
 
     return () => {
       if (scannerRef.current?.isScanning) {
@@ -33,5 +34,12 @@ export default function BarcodeScanner({ onScan }: { onScan: (text: string) => v
     };
   }, [onScan]);
 
-  return <div id="reader" className="w-full"></div>;
+  return (
+    <div id="reader" className="w-full">
+      <style jsx global>{`
+        #reader__scan_region { width: 100% !important; }
+        #reader__dashboard_section { display: none !important; }
+      `}</style>
+    </div>
+  );
 }
