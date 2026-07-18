@@ -68,25 +68,32 @@ export default function ManagePage() {
   };
 
   return (
-    <main className="p-4">
-      <h1 className="text-2xl font-bold mb-4">材料登録</h1>
-      <hr className="mb-4" />
+  <main className="p-4">
+    <h1 className="text-2xl font-bold mb-4">材料登録</h1>
+    <hr className="mb-4" />
 
-      {/* 【高速化】カメラを常にレンダリングしておき、CSSで表示・非表示を切り替える */}
-      <div className={isScanning ? "block mb-8" : "hidden"}>
+    {/* スキャンボタン（押すとカメラエリアを表示） */}
+    {!isScanning && (
+      <button 
+        onClick={() => setIsScanning(true)}
+        className="w-full bg-gray-700 text-white p-6 rounded-xl font-bold text-xl shadow-lg mb-8"
+      >
+        バーコードを読み取る
+      </button>
+    )}
+
+    {/* スキャン画面：isScanningがtrueの時だけ表示 */}
+    {isScanning && (
+      <div className="mb-8 p-4 border rounded-xl bg-gray-100">
         <BarcodeScanner onScan={onScanSuccess} />
-        <button onClick={() => setIsScanning(false)} className="w-full mt-2 bg-red-600 text-white p-3 rounded-lg font-bold">キャンセル</button>
-      </div>
-
-      {/* ボタン：スキャン中でない時だけ表示 */}
-      {!isScanning && (
         <button 
-          onClick={() => setIsScanning(true)}
-          className="w-full bg-gray-700 text-white p-6 rounded-xl font-bold text-xl shadow-lg mb-8"
+          onClick={() => setIsScanning(false)} 
+          className="w-full mt-4 bg-red-600 text-white p-3 rounded-lg"
         >
-          バーコードを読み取る
+          閉じる
         </button>
-      )}
+      </div>
+    )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* フォーム部分はそのまま */}
