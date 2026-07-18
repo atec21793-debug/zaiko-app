@@ -1,49 +1,39 @@
 'use client';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 
 export default function BarcodeScanner({ onScan }: { onScan: (text: string) => void }) {
-  useEffect(() => {
-    // 枠を広めに設定
-    const config = { 
-      fps: 15, 
-      qrbox: { width: 350, height: 200 } 
-    };
-    
-    const html5QrCode = new Html5Qrcode("reader");
+  const scannerRef = useRef<Html5Qrcode | null>(null);
 
-    // iPhoneで最も安定する最低限の設定
+  useEffect(() => {
+    // 枠サイズを大きめに設定
+    const config = { fps: 20, qrbox: { width: 350, height: 200 } };
+    const html5QrCode = new Html5Qrcode("reader");
+    scannerRef.current = html5QrCode;
+
+    // カメラ起動（環境設定をシンプルにして起動を優先）
     html5QrCode.start(
       { facingMode: "environment" },
       config,
-      (decodedText) => {
-        onScan(decodedText);
-        // スキャン成功時に停止
-        html5QrCode.stop().catch(() => {});
+      (text) => {
+        onScan(text);
       },
-      () => {} // エラーは無視
-    ).catch((err) => {
-      console.error("カメラ起動エラー:", err);
-      alert("カメラを起動できませんでした。ブラウザのカメラ権限を確認してください。");
-    });
+      () => {}
+    ).catch(console.error);
 
     return () => {
-      if (html5QrCode.isScanning) {
-        html5QrCode.stop().catch(() => {});
+      if (scannerRef.current?.isScanning) {
+        scannerRef.current.stop().catch(() => {});
       }
     };
   }, [onScan]);
 
   return (
-    <div className="w-full relative overflow-hidden rounded-lg border-2 border-blue-500">
+    <div className="w-full overflow-hidden rounded-xl border-4 border-gray-800">
       <div id="reader" className="w-full"></div>
       <style jsx global>{`
-        #reader__scan_region {
-          width: 100% !important;
-        }
-        #reader__dashboard_section {
-          display: none !important;
-        }
+        #reader__scan_region { width: 100% !important; }
+        #reader__dashboard_section { display: none !important; }
       `}</style>
     </div>
   );
