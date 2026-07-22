@@ -10,59 +10,38 @@ export default function OutboundPage() {
   const [productName, setProductName] = useState('');
   const [storeName, setStoreName] = useState('カパス');
   const [quantity, setQuantity] = useState(1);
-  const [unitPrice, setUnitPrice] = useState(0); // 履歴に残すための単価
   const [isScanning, setIsScanning] = useState(false);
   const scannedRef = useRef(false);
 
   const users = ['天野', '佐々木'];
   const stores = ['カパス', '松尾', 'ロイヤル', '電材センター', 'プロストック', 'コーナン', '建デポ', 'ビバホーム', 'コメリ'];
 
-  // 商品名と「選択中店舗の単価」を同時に取得する
-  const fetchProductAndPrice = async (code: string, store: string) => {
+  // 商品名を取得する（表示用）
+  const fetchProductName = async (code: string) => {
     if (!code) {
       setProductName('');
-      setUnitPrice(0);
       return;
     }
-
-    // 1. 商品名を取得
     const { data: prod } = await supabase.from('products').select('*').eq('barcode', code).single();
     if (prod) {
       setProductName(prod.name);
     } else {
       setProductName('（未登録の材料・マスターで登録してください）');
     }
-
-    // 2. 店舗ごとの単価（unit_prices）を取得
-    const { data: priceData } = await supabase
-      .from('unit_prices')
-      .select('price')
-      .eq('barcode', code)
-      .eq('store_name', store)
-      .single();
-
-    if (priceData) {
-      setUnitPrice(priceData.price);
-    } else {
-      // 店舗別単価がない場合はproductsテーブルの価格があればそれをフォールバックとして使う
-      const fallbackPrice = prod?.price !== undefined ? prod.price : (prod?.unit_price || 0);
-      setUnitPrice(fallbackPrice);
-    }
   };
 
-  // 店舗やバーコードが変わった時に単価を再取得
   useEffect(() => {
     if (barcode) {
-      fetchProductAndPrice(barcode, storeName);
+      fetchProductName(barcode);
     }
-  }, [storeName, barcode]);
+  }, [barcode]);
 
   const onScanSuccess = (text: string) => {
     if (scannedRef.current) return;
     scannedRef.current = true;
     setBarcode(text);
     setIsScanning(false);
-    fetchProductAndPrice(text, storeName);
+    fetchProductName(text);
     setTimeout(() => { scannedRef.current = false; }, 500);
   };
 
@@ -73,7 +52,33 @@ export default function OutboundPage() {
       return;
     }
 
-    const totalAmount = quantity * unitPrice;
+    // ★送信の瞬間に、最新の単価（店舗別単価 ＞ 商品マスター単価の順）を確実に対象店舗から取得する
+    let currentUnitPrice = 0;
+
+    // 1. まず店舗別単価（unit_prices）をチェック
+    const { data: priceData } = await supabase
+      .from('unit_prices')
+      .select('price')
+      .eq('barcode', barcode)
+      .eq('store_name', storeName)
+      .single();
+
+    if (priceData && priceData.price !== undefined) {
+      currentUnitPrice = priceData.price;
+    } else {
+      // 2. なければ製品マスター（products）の価格をチェック
+      const { data: prodData } = await supabase
+        .from('products')
+        .select('*')
+        .eq('barcode', barcode)
+        .single();
+
+      if (prodData) {
+        currentUnitPrice = prodData.price !== undefined ? prodData.price : (prodData.unit_price || 0);
+      }
+    }
+
+    const totalAmount = quantity * currentUnitPrice;
 
     // 1. 現在の在庫数を取得
     const { data: inv } = await supabase
@@ -86,14 +91,14 @@ export default function OutboundPage() {
     const currentQty = inv ? inv.quantity : 0;
     const newQty = currentQty - quantity;
 
-    // 2. 履歴追加（unit_price と total_amount を確実に保存する）
+    // 2. 履歴追加（確実に取得した単価と合計金額を記録）
     const { error: histErr } = await supabase.from('history').insert({
       barcode,
       store_name: storeName,
       user_name: selectedUser,
       type: '出庫',
       quantity,
-      unit_price: unitPrice,
+      unit_price: currentUnitPrice,
       total_amount: totalAmount,
     });
 
@@ -116,11 +121,10 @@ export default function OutboundPage() {
       });
     }
 
-    alert(`出庫完了しました (${productName} -${quantity})\n金額: ¥${totalAmount.toLocaleString()}\n現在の在庫: ${newQty}`);
+    alert(`出庫完了しました (${productName} -${quantity})\n単価: ¥${currentUnitPrice.toLocaleString()} / 合計: ¥${totalAmount.toLocaleString()}\n現在の在庫: ${newQty}`);
     setBarcode('');
     setProductName('');
     setQuantity(1);
-    setUnitPrice(0);
   };
 
   return (
