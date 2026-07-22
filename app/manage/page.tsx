@@ -2,6 +2,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import BarcodeScanner from '../components/BarcodeScanner';
+import Link from 'next/link';
+import { Home } from 'lucide-react'; // ホームアイコンをインポート
 
 export default function ManagePage() {
   const [formData, setFormData] = useState({ 
