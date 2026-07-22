@@ -82,8 +82,7 @@ export default function InboundPage() {
     setQuantity(1);
   };
 
-  return (
-    <main className="p-4 max-w-md mx-auto">
+  return (<main className="min-h-screen p-4 bg-gray-50">
       {/* ヘッダー部分：材料登録画面と同じデザイン（右端に「ホーム」ボタン） */}
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">入庫処理</h1>
