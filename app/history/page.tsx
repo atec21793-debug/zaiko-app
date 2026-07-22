@@ -117,7 +117,7 @@ export default function HistoryPage() {
   }, [historyList, selectedUserForDetail, selectedDate, selectedMonth]);
 
   return (
-    <main className="p-4 max-w-md mx-auto">
+    <main className="min-h-screen p-4 bg-gray-50">
       {/* ヘッダー */}
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">履歴・集計</h1>
