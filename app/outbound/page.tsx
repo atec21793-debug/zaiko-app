@@ -17,7 +17,7 @@ export default function OutboundPage() {
   const users = ['天野', '佐々木'];
   const stores = ['カパス', '松尾', 'ロイヤル', '電材センター', 'プロストック', 'コーナン', '建デポ', 'ビバホーム', 'コメリ'];
 
-  // 商品名と単価を安全に自動取得する
+  // 商品名と単価を自動取得する（デバッグログ付き）
   const fetchProductAndPrice = async (code: string, store: string) => {
     if (!code) {
       setProductName('');
@@ -38,7 +38,9 @@ export default function OutboundPage() {
       setProductName('（未登録の材料・マスターで登録してください）');
     }
 
-    // 2. 店舗別単価（unit_prices）を安全に取得 (.maybeSingleを使用)
+    // 2. 店舗別単価（unit_prices）を検索
+    console.log('🔍 単価検索実行 -> バーコード:', code, '/ 店舗名:', store);
+    
     const { data: priceData, error: priceErr } = await supabase
       .from('unit_prices')
       .select('price')
@@ -47,13 +49,16 @@ export default function OutboundPage() {
       .maybeSingle();
 
     if (priceErr) {
-      console.error('単価取得エラー:', priceErr);
+      console.error('❌ 単価取得エラー:', priceErr);
     }
+
+    console.log('📦 取得できた単価データ:', priceData);
 
     if (priceData && priceData.price !== null && priceData.price !== undefined) {
       setUnitPrice(Number(priceData.price));
     } else {
-      setUnitPrice(0); // 見つからない場合は0（手動で変更も可能）
+      console.warn('⚠️ 一致する店舗別単価が見つかりませんでした。単価0円になります。');
+      setUnitPrice(0);
     }
   };
 
@@ -93,7 +98,7 @@ export default function OutboundPage() {
     const currentQty = inv ? inv.quantity : 0;
     const newQty = currentQty - quantity;
 
-    // 2. 履歴追加（単価と合計金額を確実に記録）
+    // 2. 履歴追加
     const { error: histErr } = await supabase.from('history').insert({
       barcode,
       store_name: storeName,
