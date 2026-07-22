@@ -10,14 +10,14 @@ export default function OutboundPage() {
   const [productName, setProductName] = useState('');
   const [storeName, setStoreName] = useState('カパス');
   const [quantity, setQuantity] = useState(1);
-  const [unitPrice, setUnitPrice] = useState<number>(0); // 画面で確認・編集可能な単価
+  const [unitPrice, setUnitPrice] = useState<number>(0);
   const [isScanning, setIsScanning] = useState(false);
   const scannedRef = useRef(false);
 
   const users = ['天野', '佐々木'];
   const stores = ['カパス', '松尾', 'ロイヤル', '電材センター', 'プロストック', 'コーナン', '建デポ', 'ビバホーム', 'コメリ'];
 
-  // 商品名と単価を自動取得する
+  // 商品名と単価を安全に自動取得する
   const fetchProductAndPrice = async (code: string, store: string) => {
     if (!code) {
       setProductName('');
@@ -26,28 +26,34 @@ export default function OutboundPage() {
     }
 
     // 1. 商品名を取得
-    const { data: prod } = await supabase.from('products').select('*').eq('barcode', code).single();
+    const { data: prod } = await supabase
+      .from('products')
+      .select('*')
+      .eq('barcode', code)
+      .maybeSingle();
+
     if (prod) {
       setProductName(prod.name);
     } else {
       setProductName('（未登録の材料・マスターで登録してください）');
     }
 
-    // 2. 店舗別単価（unit_prices）を取得
-    const { data: priceData } = await supabase
+    // 2. 店舗別単価（unit_prices）を安全に取得 (.maybeSingleを使用)
+    const { data: priceData, error: priceErr } = await supabase
       .from('unit_prices')
       .select('price')
       .eq('barcode', code)
       .eq('store_name', store)
-      .single();
+      .maybeSingle();
+
+    if (priceErr) {
+      console.error('単価取得エラー:', priceErr);
+    }
 
     if (priceData && priceData.price !== null && priceData.price !== undefined) {
       setUnitPrice(Number(priceData.price));
-    } else if (prod && prod.price !== undefined) {
-      // 店舗別単価がなければproductsテーブルの価格を使用
-      setUnitPrice(Number(prod.price));
     } else {
-      setUnitPrice(0);
+      setUnitPrice(0); // 見つからない場合は0（手動で変更も可能）
     }
   };
 
@@ -82,12 +88,12 @@ export default function OutboundPage() {
       .select('*')
       .eq('barcode', barcode)
       .eq('store_name', storeName)
-      .single();
+      .maybeSingle();
 
     const currentQty = inv ? inv.quantity : 0;
     const newQty = currentQty - quantity;
 
-    // 2. 履歴追加（入力・取得された単価と合計金額を確実に記録）
+    // 2. 履歴追加（単価と合計金額を確実に記録）
     const { error: histErr } = await supabase.from('history').insert({
       barcode,
       store_name: storeName,
@@ -195,9 +201,8 @@ export default function OutboundPage() {
           <p className="text-xs font-bold text-gray-700 mt-1">{productName}</p>
         </div>
 
-        {/* 単価の確認・手動修正用フィールド */}
         <div>
-          <label className="block text-xs font-bold text-gray-600 mb-1">単価 (自動取得 / 必要に応じて変更可)</label>
+          <label className="block text-xs font-bold text-gray-600 mb-1">単価 (店舗別単価から自動取得・変更可)</label>
           <input
             type="number"
             value={unitPrice}
