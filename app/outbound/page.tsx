@@ -112,7 +112,7 @@ export default function OutboundPage() {
   };
 
   return (
-    <main className="p-4 max-w-md mx-auto">
+    <main className="min-h-screen p-4 bg-gray-50">
       {/* ヘッダー部分：右端に「ホーム」ボタンを配置 */}
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">出庫処理</h1>
