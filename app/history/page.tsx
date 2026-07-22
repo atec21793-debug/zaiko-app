@@ -5,7 +5,7 @@ import Link from 'next/link';
 
 export default function HistoryPage() {
   const [historyList, setHistoryList] = useState<any[]>([]);
-  const [productMap, setProductMap] = useState<{ [barcode: string]: string }>({});
+  const [productMap, setProductMap] = useState<{ [barcode: string]: { name: string; price: number } }>({});
   const [loading, setLoading] = useState(true);
 
   // 月ごとの集計用ステート (デフォルトは今月: YYYY-MM)
@@ -17,12 +17,17 @@ export default function HistoryPage() {
   const fetchData = async () => {
     setLoading(true);
     
-    // 1. 製品マスタ（products）を取得してマップを作成
+    // 1. 製品マスタ（products）を取得して「名前」と「金額（price）」のマップを作成
     const { data: prodData } = await supabase.from('products').select('*');
-    const map: { [barcode: string]: string } = {};
+    const map: { [barcode: string]: { name: string; price: number } } = {};
     if (prodData) {
       prodData.forEach((p) => {
-        map[p.barcode] = p.name;
+        // カラム名が price や unit_price など異なる場合は適宜読み替えてください（ここでは p.price を基本としています）
+        const itemPrice = p.price !== undefined ? p.price : (p.unit_price || 0);
+        map[p.barcode] = {
+          name: p.name,
+          price: itemPrice,
+        };
       });
     }
     setProductMap(map);
@@ -47,7 +52,8 @@ export default function HistoryPage() {
 
   // 履歴の削除（取り消し処理 & 在庫・集計の自動補正）
   const handleDelete = async (item: any) => {
-    const itemName = productMap[item.barcode] || item.barcode;
+    const prodInfo = productMap[item.barcode];
+    const itemName = prodInfo ? prodInfo.name : item.barcode;
     if (!confirm(`この履歴（${item.type}: ${itemName} 数量:${item.quantity}）を取り消しますか？\n在庫数も自動で元に戻ります。`)) {
       return;
     }
@@ -89,18 +95,22 @@ export default function HistoryPage() {
     });
   }, [historyList, selectedMonth]);
 
-  // 出庫者ごとの合計金額集計（選択中の月ベース）
+  // 出庫者ごとの合計金額集計（選択中の月ベース：材料マスターの金額×数量で計算）
   const userSummary = useMemo(() => {
     const summary: { [key: string]: number } = {};
     filteredHistory
       .filter((item) => item.type === '出庫' && item.user_name && item.user_name !== '-')
       .forEach((item) => {
-        summary[item.user_name] = (summary[item.user_name] || 0) + (item.total_amount || 0);
+        const prodInfo = productMap[item.barcode];
+        const unitPrice = prodInfo ? prodInfo.price : 0;
+        const totalAmount = unitPrice * item.quantity;
+
+        summary[item.user_name] = (summary[item.user_name] || 0) + totalAmount;
       });
     return summary;
-  }, [filteredHistory]);
+  }, [filteredHistory, productMap]);
 
-  // タップされた出庫者が使った材料を全店舗合算で集計（選択中の月ベース：材料名でグルーピング）
+  // タップされた出庫者が使った材料を全店舗合算で集計（材料マスター金額ベース）
   const selectedUserMaterials = useMemo(() => {
     if (!selectedUserForDetail) return [];
     const materialMap: { [name: string]: { name: string; quantity: number; totalAmount: number } } = {};
@@ -108,12 +118,16 @@ export default function HistoryPage() {
     filteredHistory
       .filter((item) => item.type === '出庫' && item.user_name === selectedUserForDetail)
       .forEach((item) => {
-        const name = productMap[item.barcode] || `(未登録: ${item.barcode})`;
+        const prodInfo = productMap[item.barcode];
+        const name = prodInfo ? prodInfo.name : `(未登録: ${item.barcode})`;
+        const unitPrice = prodInfo ? prodInfo.price : 0;
+        const totalAmount = unitPrice * item.quantity;
+
         if (!materialMap[name]) {
           materialMap[name] = { name, quantity: 0, totalAmount: 0 };
         }
         materialMap[name].quantity += item.quantity;
-        materialMap[name].totalAmount += item.total_amount || 0;
+        materialMap[name].totalAmount += totalAmount;
       });
 
     return Object.values(materialMap);
@@ -171,7 +185,7 @@ export default function HistoryPage() {
         )}
       </div>
 
-      {/* 選択された出庫者の合算材料詳細エリア（材料名表示） */}
+      {/* 選択された出庫者の合算材料詳細エリア */}
       {selectedUserForDetail && (
         <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl mb-6 shadow-sm">
           <div className="flex justify-between items-center mb-2">
@@ -201,7 +215,7 @@ export default function HistoryPage() {
         </div>
       )}
 
-      {/* 履歴一覧（時系列・材料名表示） */}
+      {/* 履歴一覧（時系列・材料名＆マスター単価表示） */}
       <h2 className="font-bold text-base mb-3">入出庫履歴 ({filteredHistory.length}件)</h2>
       {loading ? (
         <p className="text-center text-gray-500 py-8">読み込み中...</p>
@@ -210,7 +224,11 @@ export default function HistoryPage() {
       ) : (
         <div className="space-y-3">
           {filteredHistory.map((item) => {
-            const productName = productMap[item.barcode] || `(未登録: ${item.barcode})`;
+            const prodInfo = productMap[item.barcode];
+            const productName = prodInfo ? prodInfo.name : `(未登録: ${item.barcode})`;
+            const unitPrice = prodInfo ? prodInfo.price : 0;
+            const totalAmount = unitPrice * item.quantity;
+
             return (
               <div 
                 key={item.id} 
@@ -246,9 +264,9 @@ export default function HistoryPage() {
                   <span>担当: {item.user_name || '-'}</span>
                 </div>
 
-                {item.total_amount > 0 && (
+                {item.type === '出庫' && unitPrice > 0 && (
                   <div className="text-right text-xs font-bold text-gray-700 mt-1">
-                    金額: ¥{item.total_amount.toLocaleString()} (単価: ¥{item.unit_price?.toLocaleString()})
+                    金額: ¥{totalAmount.toLocaleString()} (単価: ¥{unitPrice.toLocaleString()})
                   </div>
                 )}
               </div>
