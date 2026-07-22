@@ -63,12 +63,7 @@ export default function ManagePage() {
       <h1 className="text-2xl font-bold mb-4">材料登録</h1>
       <hr className="mb-4" />
 
-      {!isScanning && (
-        <button onClick={() => setIsScanning(true)} className="w-full bg-gray-700 text-white p-6 rounded-xl font-bold text-xl shadow-lg mb-8">
-          バーコードを読み取る
-        </button>
-      )}
-
+      
      {/* 読み取りボタン */}
 {!isScanning && (
   <button 
