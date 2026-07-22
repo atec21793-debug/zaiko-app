@@ -3,7 +3,6 @@ import { useState, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import BarcodeScanner from '../components/BarcodeScanner';
 import Link from 'next/link';
-import { Home } from 'lucide-react'; // ホームアイコンをインポート
 
 export default function ManagePage() {
   const [formData, setFormData] = useState({ 
@@ -61,29 +60,35 @@ export default function ManagePage() {
   };
 
   return (
-    <main className="p-4">
-      <h1 className="text-2xl font-bold mb-4">材料登録</h1>
+    <main className="p-4 max-w-md mx-auto">
+      {/* ヘッダー部分：タイトルの右端に「ホーム」の文字ボタンを配置 */}
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-bold">材料登録</h1>
+        <Link 
+          href="/" 
+          className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg shadow-sm font-bold text-sm transition"
+        >
+          ホーム
+        </Link>
+      </div>
       <hr className="mb-4" />
 
-      
-     {/* 読み取りボタン */}
-{!isScanning && (
-  <button 
-    type="button"
-    onClick={() => setIsScanning(true)} 
-    className="w-full bg-gray-700 text-white p-6 rounded-xl font-bold text-xl shadow-lg mb-8"
-  >
-    バーコードを読み取る
-  </button>
-)}
+      {!isScanning && (
+        <button 
+          type="button"
+          onClick={() => setIsScanning(true)} 
+          className="w-full bg-gray-700 text-white p-6 rounded-xl font-bold text-xl shadow-lg mb-8"
+        >
+          バーコードを読み取る
+        </button>
+      )}
 
-{/* スキャナー表示中 */}
-{isScanning && (
-  <BarcodeScanner 
-    onScan={onScanSuccess} 
-    onClose={() => setIsScanning(false)} 
-  />
-)}
+      {isScanning && (
+        <BarcodeScanner 
+          onScan={onScanSuccess} 
+          onClose={() => setIsScanning(false)} 
+        />
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <input type="text" placeholder="JANコード" className="w-full p-3 border rounded-lg" value={formData.barcode} onChange={(e) => setFormData({...formData, barcode: e.target.value})} required />
@@ -92,7 +97,7 @@ export default function ManagePage() {
         {/* 型番 */}
         <input type="text" placeholder="型番" className="w-full p-3 border rounded-lg" value={formData.model_number} onChange={(e) => setFormData({...formData, model_number: e.target.value})} />
         
-        {/* 【配置変更】ドロップダウンを型番の下へ */}
+        {/* 登録済みリストから選択 */}
         <select 
           className="w-full p-3 border rounded-lg bg-gray-50 text-gray-600"
           onChange={(e) => {
