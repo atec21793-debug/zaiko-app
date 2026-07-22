@@ -144,14 +144,14 @@ export default function HistoryPage() {
       </div>
       <hr className="mb-4" />
 
-      {/* 月選択フィルター */}
+      {/* 月選択フィルター（text-baseにしてスマホでの自動拡大を防止） */}
       <div className="bg-white p-3 rounded-xl border shadow-sm mb-4">
         <label className="block text-xs font-bold text-gray-600 mb-1">表示する月を選択</label>
         <input 
           type="month" 
           value={selectedMonth} 
           onChange={(e) => { setSelectedMonth(e.target.value); setSelectedUserForDetail(null); }}
-          className="w-full p-2 border rounded-lg text-sm bg-gray-50 font-bold"
+          className="w-full p-2 border rounded-lg text-base bg-gray-50 font-bold"
         />
       </div>
 

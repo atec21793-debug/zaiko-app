@@ -115,10 +115,11 @@ export default function InboundPage() {
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-xs font-bold text-gray-600 mb-1">対象店舗</label>
+          {/* text-base に変更して自動拡大を防止 */}
           <select
             value={storeName}
             onChange={(e) => setStoreName(e.target.value)}
-            className="w-full p-3 border rounded-lg bg-white text-sm"
+            className="w-full p-3 border rounded-lg bg-white text-base"
           >
             {stores.map((s) => (<option key={s} value={s}>{s}</option>))}
           </select>
@@ -126,6 +127,7 @@ export default function InboundPage() {
 
         <div>
           <label className="block text-xs font-bold text-gray-600 mb-1">JANコード</label>
+          {/* text-base に変更して自動拡大を防止 */}
           <input
             type="text"
             value={barcode}
@@ -134,7 +136,7 @@ export default function InboundPage() {
               fetchProductInfo(e.target.value);
             }}
             required
-            className="w-full p-3 border rounded-lg text-sm"
+            className="w-full p-3 border rounded-lg text-base bg-white"
             placeholder="バーコード入力"
           />
           <p className="text-xs font-bold text-gray-700 mt-1">{productName}</p>
@@ -142,13 +144,14 @@ export default function InboundPage() {
 
         <div>
           <label className="block text-xs font-bold text-gray-600 mb-1">入庫数量</label>
+          {/* text-base に変更して自動拡大を防止 */}
           <input
             type="number"
             value={quantity}
             onChange={(e) => setQuantity(Number(e.target.value))}
             min="1"
             required
-            className="w-full p-3 border rounded-lg text-sm"
+            className="w-full p-3 border rounded-lg text-base bg-white"
           />
         </div>
 

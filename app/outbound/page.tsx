@@ -187,7 +187,7 @@ export default function OutboundPage() {
           <select
             value={storeName}
             onChange={(e) => setStoreName(e.target.value)}
-            className="w-full p-3 border rounded-lg bg-white text-sm"
+            className="w-full p-3 border rounded-lg bg-white text-base"
           >
             {stores.map((s) => (<option key={s} value={s}>{s}</option>))}
           </select>

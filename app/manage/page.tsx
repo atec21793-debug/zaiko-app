@@ -128,10 +128,11 @@ export default function ManagePage() {
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-xs font-bold text-gray-600 mb-1">JANコード</label>
+          {/* text-base に変更して自動拡大を防止 */}
           <input 
             type="text" 
             placeholder="JANコード" 
-            className="w-full p-3 border rounded-lg bg-white text-sm" 
+            className="w-full p-3 border rounded-lg bg-white text-base" 
             value={formData.barcode} 
             onChange={(e) => {
               const val = e.target.value;
@@ -144,10 +145,11 @@ export default function ManagePage() {
 
         <div>
           <label className="block text-xs font-bold text-gray-600 mb-1">材料名</label>
+          {/* text-base に変更して自動拡大を防止 */}
           <input 
             type="text" 
             placeholder="材料名" 
-            className="w-full p-3 border rounded-lg bg-white text-sm" 
+            className="w-full p-3 border rounded-lg bg-white text-base" 
             value={formData.name} 
             onChange={(e) => setFormData({...formData, name: e.target.value})} 
             required 
@@ -156,10 +158,11 @@ export default function ManagePage() {
         
         <div>
           <label className="block text-xs font-bold text-gray-600 mb-1">型番</label>
+          {/* text-base に変更して自動拡大を防止 */}
           <input 
             type="text" 
             placeholder="型番" 
-            className="w-full p-3 border rounded-lg bg-white text-sm" 
+            className="w-full p-3 border rounded-lg bg-white text-base" 
             value={formData.model_number} 
             onChange={(e) => setFormData({...formData, model_number: e.target.value})} 
           />
@@ -168,8 +171,9 @@ export default function ManagePage() {
         {/* 登録済みリストから選択 */}
         <div>
           <label className="block text-xs font-bold text-gray-600 mb-1">登録済みリストから呼び出し</label>
+          {/* text-base に変更して自動拡大を防止 */}
           <select 
-            className="w-full p-3 border rounded-lg bg-white text-gray-700 text-sm font-bold"
+            className="w-full p-3 border rounded-lg bg-white text-gray-700 text-base font-bold"
             value={formData.barcode}
             onChange={(e) => {
               const code = e.target.value;
@@ -193,11 +197,12 @@ export default function ManagePage() {
           {stores.map((store) => (
             <div key={store} className="flex items-center gap-2 bg-white p-3 rounded-lg shadow-sm border">
               <span className="w-28 text-sm font-bold text-gray-700">{store}</span>
+              {/* text-base に変更して自動拡大を防止 */}
               <input 
                 type="number" 
                 inputMode="numeric" 
                 placeholder="単価" 
-                className="flex-1 p-2 border rounded-lg text-right text-sm font-bold" 
+                className="flex-1 p-2 border rounded-lg text-right text-base font-bold" 
                 value={prices[store] || ''} 
                 onChange={(e) => handlePriceChange(store, e.target.value)} 
               />
