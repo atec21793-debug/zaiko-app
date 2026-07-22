@@ -69,13 +69,23 @@ export default function ManagePage() {
         </button>
       )}
 
-     {isScanning && (
-  <div className="mb-8 p-4 border rounded-xl bg-gray-100">
-    <BarcodeScanner 
-      onScan={onScanSuccess} 
-      onClose={() => setIsScanning(false)} 
-    />
-  </div>
+     {/* 読み取りボタン */}
+{!isScanning && (
+  <button 
+    type="button"
+    onClick={() => setIsScanning(true)} 
+    className="w-full bg-gray-700 text-white p-6 rounded-xl font-bold text-xl shadow-lg mb-8"
+  >
+    バーコードを読み取る
+  </button>
+)}
+
+{/* スキャナー表示中 */}
+{isScanning && (
+  <BarcodeScanner 
+    onScan={onScanSuccess} 
+    onClose={() => setIsScanning(false)} 
+  />
 )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
