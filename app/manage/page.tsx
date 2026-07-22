@@ -69,12 +69,18 @@ export default function ManagePage() {
         </button>
       )}
 
-      {isScanning && (
-        <div className="mb-8 p-4 border rounded-xl bg-gray-100">
-          <BarcodeScanner onScan={onScanSuccess} />
-          <button onClick={() => setIsScanning(false)} className="w-full mt-4 bg-red-600 text-white p-3 rounded-lg">閉じる</button>
-        </div>
-      )}
+     {isScanning && (
+  <div className="mb-8 p-4 border rounded-xl bg-gray-100 shadow-inner">
+    <BarcodeScanner onScan={onScanSuccess} />
+    <button 
+      type="button"
+      onClick={() => setIsScanning(false)} 
+      className="w-full mt-4 bg-red-600 text-white p-3 rounded-lg font-bold"
+    >
+      閉じる
+    </button>
+  </div>
+)}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <input type="text" placeholder="JANコード" className="w-full p-3 border rounded-lg" value={formData.barcode} onChange={(e) => setFormData({...formData, barcode: e.target.value})} required />
