@@ -7,11 +7,10 @@ export default function HistoryPage() {
   const [historyList, setHistoryList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // フィルター用ステート
-  const todayStr = new Date().toISOString().split('T')[0];
-  const [selectedDate, setSelectedDate] = useState(todayStr); // デフォルトは今日
-  const [selectedMonth, setSelectedMonth] = useState(''); // 月ごとの集計用 (YYYY-MM)
-  const [selectedUserForDetail, setSelectedUserForDetail] = useState<string | null>(null); // タップされた出庫者
+  // 月ごとの集計用ステート (デフォルトは今月: YYYY-MM)
+  const currentMonthStr = new Date().toISOString().substring(0, 7);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonthStr); 
+  const [selectedUserForDetail, setSelectedUserForDetail] = useState<string | null>(null);
 
   // 履歴データの取得
   const fetchHistory = async () => {
@@ -39,14 +38,12 @@ export default function HistoryPage() {
       return;
     }
 
-    // 1. 履歴を削除
     const { error: delErr } = await supabase.from('history').delete().eq('id', item.id);
     if (delErr) {
       alert('削除エラー: ' + delErr.message);
       return;
     }
 
-    // 2. 在庫数を自動補正（入庫なら減らし、出庫なら増やす）
     const { data: inv } = await supabase
       .from('inventory')
       .select('*')
@@ -67,22 +64,18 @@ export default function HistoryPage() {
     fetchHistory();
   };
 
-  // フィルタリングされた履歴データ
+  // 選択された「月」でフィルタリング
   const filteredHistory = useMemo(() => {
     return historyList.filter((item) => {
-      const itemDateStr = item.created_at.split('T')[0];
-      const itemMonthStr = itemDateStr.substring(0, 7); // YYYY-MM
-
+      const itemMonthStr = item.created_at.split('T')[0].substring(0, 7); // YYYY-MM
       if (selectedMonth) {
         return itemMonthStr === selectedMonth;
-      } else if (selectedDate) {
-        return itemDateStr === selectedDate;
       }
       return true;
     });
-  }, [historyList, selectedDate, selectedMonth]);
+  }, [historyList, selectedMonth]);
 
-  // 出庫者ごとの合計金額集計（選択中の日付 or 月ベース）
+  // 出庫者ごとの合計金額集計（選択中の月ベース）
   const userSummary = useMemo(() => {
     const summary: { [key: string]: number } = {};
     filteredHistory
@@ -93,18 +86,13 @@ export default function HistoryPage() {
     return summary;
   }, [filteredHistory]);
 
-  // タップされた出庫者が使った材料を全店舗合算で集計
+  // タップされた出庫者が使った材料を全店舗合算で集計（選択中の月ベース）
   const selectedUserMaterials = useMemo(() => {
     if (!selectedUserForDetail) return [];
     const materialMap: { [barcode: string]: { barcode: string; quantity: number; totalAmount: number } } = {};
 
-    historyList
-      .filter((item) => {
-        const itemDateStr = item.created_at.split('T')[0];
-        const itemMonthStr = itemDateStr.substring(0, 7);
-        const matchPeriod = selectedMonth ? itemMonthStr === selectedMonth : selectedDate ? itemDateStr === selectedDate : true;
-        return matchPeriod && item.type === '出庫' && item.user_name === selectedUserForDetail;
-      })
+    filteredHistory
+      .filter((item) => item.type === '出庫' && item.user_name === selectedUserForDetail)
       .forEach((item) => {
         if (!materialMap[item.barcode]) {
           materialMap[item.barcode] = { barcode: item.barcode, quantity: 0, totalAmount: 0 };
@@ -114,13 +102,13 @@ export default function HistoryPage() {
       });
 
     return Object.values(materialMap);
-  }, [historyList, selectedUserForDetail, selectedDate, selectedMonth]);
+  }, [filteredHistory, selectedUserForDetail]);
 
   return (
-    <main className="min-h-screen p-4 bg-gray-50">
+    <main className="w-full max-w-full p-4">
       {/* ヘッダー */}
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">履歴・集計</h1>
+        <h1 className="text-2xl font-bold">月別履歴・集計</h1>
         <Link 
           href="/" 
           className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg shadow-sm font-bold text-sm transition"
@@ -130,47 +118,24 @@ export default function HistoryPage() {
       </div>
       <hr className="mb-4" />
 
-      {/* 期間フィルター（日付 or 月） */}
-      <div className="bg-white p-3 rounded-xl border shadow-sm mb-4 space-y-2">
-        <div className="flex justify-between items-center text-xs font-bold text-gray-600">
-          <span>表示フィルター</span>
-          <button 
-            type="button" 
-            onClick={() => { setSelectedDate(todayStr); setSelectedMonth(''); setSelectedUserForDetail(null); }}
-            className="text-blue-600 underline"
-          >
-            今日に戻す
-          </button>
-        </div>
-        <div className="flex gap-2">
-          <div className="flex-1">
-            <label className="block text-[10px] text-gray-500 mb-1">日付で絞り込み</label>
-            <input 
-              type="date" 
-              value={selectedMonth ? '' : selectedDate} 
-              onChange={(e) => { setSelectedDate(e.target.value); setSelectedMonth(''); }}
-              className="w-full p-2 border rounded-lg text-xs bg-gray-50"
-            />
-          </div>
-          <div className="flex-1">
-            <label className="block text-[10px] text-gray-500 mb-1">月ごとの集計 (YYYY-MM)</label>
-            <input 
-              type="month" 
-              value={selectedMonth} 
-              onChange={(e) => { setSelectedMonth(e.target.value); setSelectedDate(''); }}
-              className="w-full p-2 border rounded-lg text-xs bg-gray-50"
-            />
-          </div>
-        </div>
+      {/* 月選択フィルター */}
+      <div className="bg-white p-3 rounded-xl border shadow-sm mb-4">
+        <label className="block text-xs font-bold text-gray-600 mb-1">表示する月を選択</label>
+        <input 
+          type="month" 
+          value={selectedMonth} 
+          onChange={(e) => { setSelectedMonth(e.target.value); setSelectedUserForDetail(null); }}
+          className="w-full p-2 border rounded-lg text-sm bg-gray-50 font-bold"
+        />
       </div>
 
       {/* 出庫者ごとの合計金額集計セクション */}
       <div className="bg-gray-800 text-white p-4 rounded-xl shadow-md mb-6">
         <h2 className="text-sm font-bold mb-2 border-b border-gray-700 pb-1">
-          出庫者別 合計金額 ({selectedMonth ? `${selectedMonth}全体` : selectedDate})
+          👤 出庫者別 合計金額 ({selectedMonth || '全期間'})
         </h2>
         {Object.keys(userSummary).length === 0 ? (
-          <p className="text-xs text-gray-400 py-2">この期間の出庫データはありません</p>
+          <p className="text-xs text-gray-400 py-2">この月の出庫データはありません</p>
         ) : (
           <div className="space-y-2 mt-2">
             {Object.entries(userSummary).map(([user, total]) => (
@@ -182,7 +147,7 @@ export default function HistoryPage() {
                 }`}
               >
                 <span className="text-sm font-bold flex items-center gap-1">
-                  👤 {user} <span className="text-[10px] text-gray-400 font-normal">（タップで詳細）</span>
+                  {user} <span className="text-[10px] text-gray-400 font-normal">（タップで詳細）</span>
                 </span>
                 <span className="text-base font-black text-green-400">¥{total.toLocaleString()}</span>
               </div>
@@ -226,7 +191,7 @@ export default function HistoryPage() {
       {loading ? (
         <p className="text-center text-gray-500 py-8">読み込み中...</p>
       ) : filteredHistory.length === 0 ? (
-        <p className="text-center text-gray-500 py-8">該当する履歴はありません。</p>
+        <p className="text-center text-gray-500 py-8">該当する月の履歴はありません。</p>
       ) : (
         <div className="space-y-3">
           {filteredHistory.map((item) => (
