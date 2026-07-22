@@ -5,43 +5,64 @@ import BarcodeScanner from '../components/BarcodeScanner';
 import Link from 'next/link';
 
 export default function OutboundPage() {
-  const [selectedUser, setSelectedUser] = useState('天野'); // タブ切り替え用担当者
+  const [selectedUser, setSelectedUser] = useState('天野');
   const [barcode, setBarcode] = useState('');
   const [productName, setProductName] = useState('');
   const [storeName, setStoreName] = useState('カパス');
   const [quantity, setQuantity] = useState(1);
-  const [unitPrice, setUnitPrice] = useState(0); // 内部保持用（履歴・集計計算用）
+  const [unitPrice, setUnitPrice] = useState(0); // 履歴に残すための単価
   const [isScanning, setIsScanning] = useState(false);
   const scannedRef = useRef(false);
 
-  const users = ['天野', '佐々木']; // 担当者一覧
+  const users = ['天野', '佐々木'];
   const stores = ['カパス', '松尾', 'ロイヤル', '電材センター', 'プロストック', 'コーナン', '建デポ', 'ビバホーム', 'コメリ'];
 
-  // 商品情報とマスター単価を取得（画面には表示しませんが履歴用に保持します）
-  const fetchProductInfo = async (code: string) => {
+  // 商品名と「選択中店舗の単価」を同時に取得する
+  const fetchProductAndPrice = async (code: string, store: string) => {
+    if (!code) {
+      setProductName('');
+      setUnitPrice(0);
+      return;
+    }
+
+    // 1. 商品名を取得
     const { data: prod } = await supabase.from('products').select('*').eq('barcode', code).single();
     if (prod) {
       setProductName(prod.name);
-      const itemPrice = prod.price !== undefined ? prod.price : (prod.unit_price || 0);
-      setUnitPrice(itemPrice);
     } else {
       setProductName('（未登録の材料・マスターで登録してください）');
-      setUnitPrice(0);
+    }
+
+    // 2. 店舗ごとの単価（unit_prices）を取得
+    const { data: priceData } = await supabase
+      .from('unit_prices')
+      .select('price')
+      .eq('barcode', code)
+      .eq('store_name', store)
+      .single();
+
+    if (priceData) {
+      setUnitPrice(priceData.price);
+    } else {
+      // 店舗別単価がない場合はproductsテーブルの価格があればそれをフォールバックとして使う
+      const fallbackPrice = prod?.price !== undefined ? prod.price : (prod?.unit_price || 0);
+      setUnitPrice(fallbackPrice);
     }
   };
 
+  // 店舗やバーコードが変わった時に単価を再取得
   useEffect(() => {
     if (barcode) {
-      fetchProductInfo(barcode);
+      fetchProductAndPrice(barcode, storeName);
     }
-  }, [barcode]);
+  }, [storeName, barcode]);
 
   const onScanSuccess = (text: string) => {
     if (scannedRef.current) return;
     scannedRef.current = true;
     setBarcode(text);
     setIsScanning(false);
-    fetchProductInfo(text);
+    fetchProductAndPrice(text, storeName);
     setTimeout(() => { scannedRef.current = false; }, 500);
   };
 
@@ -54,7 +75,7 @@ export default function OutboundPage() {
 
     const totalAmount = quantity * unitPrice;
 
-    // 1. 現在の在庫数を取得（なくてもマイナス出庫させるため 0 として扱う）
+    // 1. 現在の在庫数を取得
     const { data: inv } = await supabase
       .from('inventory')
       .select('*')
@@ -63,9 +84,9 @@ export default function OutboundPage() {
       .single();
 
     const currentQty = inv ? inv.quantity : 0;
-    const newQty = currentQty - quantity; // 在庫不足ならマイナスになる
+    const newQty = currentQty - quantity;
 
-    // 2. 履歴追加（選択中の担当者、マスター単価・合計金額を記録）
+    // 2. 履歴追加（unit_price と total_amount を確実に保存する）
     const { error: histErr } = await supabase.from('history').insert({
       barcode,
       store_name: storeName,
@@ -81,14 +102,13 @@ export default function OutboundPage() {
       return;
     }
 
-    // 3. 在庫数を更新（マイナス許容）
+    // 3. 在庫数を更新
     if (inv) {
       await supabase
         .from('inventory')
         .update({ quantity: newQty })
         .eq('id', inv.id);
     } else {
-      // 在庫データすらない場合はマイナスから新規作成
       await supabase.from('inventory').insert({
         barcode,
         store_name: storeName,
@@ -96,7 +116,7 @@ export default function OutboundPage() {
       });
     }
 
-    alert(`出庫完了しました (${productName} -${quantity})\n現在の在庫: ${newQty}`);
+    alert(`出庫完了しました (${productName} -${quantity})\n金額: ¥${totalAmount.toLocaleString()}\n現在の在庫: ${newQty}`);
     setBarcode('');
     setProductName('');
     setQuantity(1);
@@ -105,7 +125,6 @@ export default function OutboundPage() {
 
   return (
     <main className="w-full max-w-full min-h-screen p-4 bg-gray-50">
-      {/* ヘッダー部分：右端に「ホーム」ボタンを配置 */}
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">出庫処理</h1>
         <Link 
@@ -116,7 +135,6 @@ export default function OutboundPage() {
         </Link>
       </div>
 
-      {/* 担当者切り替えタブ */}
       <div className="flex bg-gray-200 p-1 rounded-xl mb-4">
         {users.map((user) => (
           <button
@@ -168,9 +186,7 @@ export default function OutboundPage() {
           <input
             type="text"
             value={barcode}
-            onChange={(e) => {
-              setBarcode(e.target.value);
-            }}
+            onChange={(e) => setBarcode(e.target.value)}
             required
             className="w-full p-3 border rounded-lg text-sm bg-white"
             placeholder="バーコード入力"
