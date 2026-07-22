@@ -10,38 +10,59 @@ export default function OutboundPage() {
   const [productName, setProductName] = useState('');
   const [storeName, setStoreName] = useState('カパス');
   const [quantity, setQuantity] = useState(1);
+  const [unitPrice, setUnitPrice] = useState<number>(0); // 画面で確認・編集可能な単価
   const [isScanning, setIsScanning] = useState(false);
   const scannedRef = useRef(false);
 
   const users = ['天野', '佐々木'];
   const stores = ['カパス', '松尾', 'ロイヤル', '電材センター', 'プロストック', 'コーナン', '建デポ', 'ビバホーム', 'コメリ'];
 
-  // 商品名を取得する
-  const fetchProductName = async (code: string) => {
+  // 商品名と単価を自動取得する
+  const fetchProductAndPrice = async (code: string, store: string) => {
     if (!code) {
       setProductName('');
+      setUnitPrice(0);
       return;
     }
+
+    // 1. 商品名を取得
     const { data: prod } = await supabase.from('products').select('*').eq('barcode', code).single();
     if (prod) {
       setProductName(prod.name);
     } else {
       setProductName('（未登録の材料・マスターで登録してください）');
     }
+
+    // 2. 店舗別単価（unit_prices）を取得
+    const { data: priceData } = await supabase
+      .from('unit_prices')
+      .select('price')
+      .eq('barcode', code)
+      .eq('store_name', store)
+      .single();
+
+    if (priceData && priceData.price !== null && priceData.price !== undefined) {
+      setUnitPrice(Number(priceData.price));
+    } else if (prod && prod.price !== undefined) {
+      // 店舗別単価がなければproductsテーブルの価格を使用
+      setUnitPrice(Number(prod.price));
+    } else {
+      setUnitPrice(0);
+    }
   };
 
   useEffect(() => {
     if (barcode) {
-      fetchProductName(barcode);
+      fetchProductAndPrice(barcode, storeName);
     }
-  }, [barcode]);
+  }, [barcode, storeName]);
 
   const onScanSuccess = (text: string) => {
     if (scannedRef.current) return;
     scannedRef.current = true;
     setBarcode(text);
     setIsScanning(false);
-    fetchProductName(text);
+    fetchProductAndPrice(text, storeName);
     setTimeout(() => { scannedRef.current = false; }, 500);
   };
 
@@ -52,31 +73,8 @@ export default function OutboundPage() {
       return;
     }
 
-    // ★出庫時に店舗別の単価（unit_prices）を自動取得して計算する
-    let unitPrice = 0;
-    const { data: priceData } = await supabase
-      .from('unit_prices')
-      .select('price')
-      .eq('barcode', barcode)
-      .eq('store_name', storeName)
-      .single();
-
-    if (priceData && priceData.price !== null && priceData.price !== undefined) {
-      unitPrice = Number(priceData.price);
-    } else {
-      // 店舗別単価がなければ products テーブルの価格をフォールバックとして使用
-      const { data: prodData } = await supabase
-        .from('products')
-        .select('price')
-        .eq('barcode', barcode)
-        .single();
-      
-      if (prodData && prodData.price !== null && prodData.price !== undefined) {
-        unitPrice = Number(prodData.price);
-      }
-    }
-
-    const totalAmount = quantity * unitPrice;
+    const currentUnitPrice = Number(unitPrice) || 0;
+    const totalAmount = quantity * currentUnitPrice;
 
     // 1. 現在の在庫数を取得
     const { data: inv } = await supabase
@@ -89,14 +87,14 @@ export default function OutboundPage() {
     const currentQty = inv ? inv.quantity : 0;
     const newQty = currentQty - quantity;
 
-    // 2. 履歴追加（正しい単価と合計金額を記録）
+    // 2. 履歴追加（入力・取得された単価と合計金額を確実に記録）
     const { error: histErr } = await supabase.from('history').insert({
       barcode,
       store_name: storeName,
       user_name: selectedUser,
       type: '出庫',
       quantity,
-      unit_price: unitPrice,
+      unit_price: currentUnitPrice,
       total_amount: totalAmount,
     });
 
@@ -119,10 +117,11 @@ export default function OutboundPage() {
       });
     }
 
-    alert(`出庫完了しました (${productName} -${quantity})\n現在の在庫: ${newQty}`);
+    alert(`出庫完了しました (${productName} -${quantity})\n単価: ¥${currentUnitPrice.toLocaleString()} / 合計: ¥${totalAmount.toLocaleString()}\n現在の在庫: ${newQty}`);
     setBarcode('');
     setProductName('');
     setQuantity(1);
+    setUnitPrice(0);
   };
 
   return (
@@ -194,6 +193,19 @@ export default function OutboundPage() {
             placeholder="バーコード入力"
           />
           <p className="text-xs font-bold text-gray-700 mt-1">{productName}</p>
+        </div>
+
+        {/* 単価の確認・手動修正用フィールド */}
+        <div>
+          <label className="block text-xs font-bold text-gray-600 mb-1">単価 (自動取得 / 必要に応じて変更可)</label>
+          <input
+            type="number"
+            value={unitPrice}
+            onChange={(e) => setUnitPrice(Number(e.target.value))}
+            min="0"
+            required
+            className="w-full p-3 border rounded-lg text-sm bg-white font-bold text-green-700"
+          />
         </div>
 
         <div>
