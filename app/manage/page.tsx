@@ -70,15 +70,11 @@ export default function ManagePage() {
       )}
 
      {isScanning && (
-  <div className="mb-8 p-4 border rounded-xl bg-gray-100 shadow-inner">
-    <BarcodeScanner onScan={onScanSuccess} />
-    <button 
-      type="button"
-      onClick={() => setIsScanning(false)} 
-      className="w-full mt-4 bg-red-600 text-white p-3 rounded-lg font-bold"
-    >
-      閉じる
-    </button>
+  <div className="mb-8 p-4 border rounded-xl bg-gray-100">
+    <BarcodeScanner 
+      onScan={onScanSuccess} 
+      onClose={() => setIsScanning(false)} 
+    />
   </div>
 )}
 
