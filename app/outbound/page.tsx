@@ -10,46 +10,40 @@ export default function OutboundPage() {
   const [productName, setProductName] = useState('');
   const [storeName, setStoreName] = useState('カパス');
   const [quantity, setQuantity] = useState(1);
-  const [unitPrice, setUnitPrice] = useState(0); // マスタ単価
+  const [unitPrice, setUnitPrice] = useState(0); // マスター単価
   const [isScanning, setIsScanning] = useState(false);
   const scannedRef = useRef(false);
 
   const users = ['天野', '佐々木']; // 担当者一覧
   const stores = ['カパス', '松尾', 'ロイヤル', '電材センター', 'プロストック', 'コーナン', '建デポ', 'ビバホーム', 'コメリ'];
 
-  // 商品情報とマスタ単価を取得
-  const fetchProductInfo = async (code: string, store: string) => {
-    // 1. 商品名を取得
+  // 商品情報とマスター単価を取得
+  const fetchProductInfo = async (code: string) => {
+    // 1. 製品マスター（products）から商品名と価格を取得
     const { data: prod } = await supabase.from('products').select('*').eq('barcode', code).single();
     if (prod) {
       setProductName(prod.name);
+      // カラム名が price や unit_price などに対応できるように考慮
+      const itemPrice = prod.price !== undefined ? prod.price : (prod.unit_price || 0);
+      setUnitPrice(itemPrice);
     } else {
-      setProductName('（未登録の材料・マスタで登録してください）');
+      setProductName('（未登録の材料・マスターで登録してください）');
+      setUnitPrice(0);
     }
-
-    // 2. 店舗ごとのマスタ単価を取得
-    const { data: priceData } = await supabase
-      .from('unit_prices')
-      .select('price')
-      .eq('barcode', code)
-      .eq('store_name', store)
-      .single();
-
-    setUnitPrice(priceData ? priceData.price : 0);
   };
 
   useEffect(() => {
     if (barcode) {
-      fetchProductInfo(barcode, storeName);
+      fetchProductInfo(barcode);
     }
-  }, [storeName]);
+  }, [barcode]);
 
   const onScanSuccess = (text: string) => {
     if (scannedRef.current) return;
     scannedRef.current = true;
     setBarcode(text);
     setIsScanning(false);
-    fetchProductInfo(text, storeName);
+    fetchProductInfo(text);
     setTimeout(() => { scannedRef.current = false; }, 500);
   };
 
@@ -73,7 +67,7 @@ export default function OutboundPage() {
     const currentQty = inv ? inv.quantity : 0;
     const newQty = currentQty - quantity; // 在庫不足ならマイナスになる
 
-    // 2. 履歴追加（選択中の担当者、マスタ単価・合計金額を記録）
+    // 2. 履歴追加（選択中の担当者、マスター単価・合計金額を記録）
     const { error: histErr } = await supabase.from('history').insert({
       barcode,
       store_name: storeName,
@@ -112,7 +106,7 @@ export default function OutboundPage() {
   };
 
   return (
-    <main className="min-h-screen p-4 bg-gray-50">
+    <main className="w-full max-w-full min-h-screen p-4 bg-gray-50">
       {/* ヘッダー部分：右端に「ホーム」ボタンを配置 */}
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">出庫処理</h1>
@@ -178,10 +172,9 @@ export default function OutboundPage() {
             value={barcode}
             onChange={(e) => {
               setBarcode(e.target.value);
-              fetchProductInfo(e.target.value, storeName);
             }}
             required
-            className="w-full p-3 border rounded-lg text-sm"
+            className="w-full p-3 border rounded-lg text-sm bg-white"
             placeholder="バーコード入力"
           />
           <p className="text-xs font-bold text-gray-700 mt-1">{productName}</p>
@@ -195,28 +188,20 @@ export default function OutboundPage() {
             onChange={(e) => setQuantity(Number(e.target.value))}
             min="1"
             required
-            className="w-full p-3 border rounded-lg text-sm"
+            className="w-full p-3 border rounded-lg text-sm bg-white"
           />
         </div>
 
-        <div>
-          <label className="block text-xs font-bold text-gray-600 mb-1">単価 (マスタ自動設定・円)</label>
-          <input
-            type="number"
-            value={unitPrice}
-            readOnly
-            className="w-full p-3 border rounded-lg text-sm bg-gray-100 text-gray-600"
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs font-bold text-gray-600 mb-1">出庫金額 合計 (円)</label>
-          <input
-            type="number"
-            value={quantity * unitPrice}
-            readOnly
-            className="w-full p-3 border rounded-lg text-sm bg-gray-100 font-bold text-gray-800"
-          />
+        {/* 自動取得される単価と合計金額の表示（入力不要） */}
+        <div className="bg-white p-3 border rounded-xl space-y-2 shadow-sm">
+          <div className="flex justify-between items-center text-xs">
+            <span className="text-gray-600 font-bold">マスター単価:</span>
+            <span className="font-bold text-gray-800">¥{unitPrice.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between items-center text-sm border-t pt-2">
+            <span className="text-gray-800 font-bold">出庫金額 合計:</span>
+            <span className="text-base font-black text-green-600">¥{(quantity * unitPrice).toLocaleString()}</span>
+          </div>
         </div>
 
         <button type="submit" className="w-full bg-gray-800 text-white p-5 rounded-xl font-bold text-lg shadow-lg mt-6">
