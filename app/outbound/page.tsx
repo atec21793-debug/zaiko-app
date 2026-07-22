@@ -5,30 +5,51 @@ import BarcodeScanner from '../components/BarcodeScanner';
 import Link from 'next/link';
 
 export default function OutboundPage() {
+  const [selectedUser, setSelectedUser] = useState('天野'); // タブ切り替え用担当者
   const [barcode, setBarcode] = useState('');
   const [productName, setProductName] = useState('');
   const [storeName, setStoreName] = useState('カパス');
   const [quantity, setQuantity] = useState(1);
+  const [unitPrice, setUnitPrice] = useState(0); // マスタ単価
   const [isScanning, setIsScanning] = useState(false);
   const scannedRef = useRef(false);
 
+  const users = ['天野', '佐々木']; // 担当者一覧
   const stores = ['カパス', '松尾', 'ロイヤル', '電材センター', 'プロストック', 'コーナン', '建デポ', 'ビバホーム', 'コメリ'];
 
-  const fetchProductInfo = async (code: string) => {
+  // 商品情報とマスタ単価を取得
+  const fetchProductInfo = async (code: string, store: string) => {
+    // 1. 商品名を取得
     const { data: prod } = await supabase.from('products').select('*').eq('barcode', code).single();
     if (prod) {
       setProductName(prod.name);
     } else {
       setProductName('（未登録の材料・マスタで登録してください）');
     }
+
+    // 2. 店舗ごとのマスタ単価を取得
+    const { data: priceData } = await supabase
+      .from('unit_prices')
+      .select('price')
+      .eq('barcode', code)
+      .eq('store_name', store)
+      .single();
+
+    setUnitPrice(priceData ? priceData.price : 0);
   };
+
+  useEffect(() => {
+    if (barcode) {
+      fetchProductInfo(barcode, storeName);
+    }
+  }, [storeName]);
 
   const onScanSuccess = (text: string) => {
     if (scannedRef.current) return;
     scannedRef.current = true;
     setBarcode(text);
     setIsScanning(false);
-    fetchProductInfo(text);
+    fetchProductInfo(text, storeName);
     setTimeout(() => { scannedRef.current = false; }, 500);
   };
 
@@ -39,7 +60,9 @@ export default function OutboundPage() {
       return;
     }
 
-    // 1. 現在の在庫数をチェック
+    const totalAmount = quantity * unitPrice;
+
+    // 1. 現在の在庫数を取得（なくてもマイナス出庫させるため 0 として扱う）
     const { data: inv } = await supabase
       .from('inventory')
       .select('*')
@@ -48,20 +71,17 @@ export default function OutboundPage() {
       .single();
 
     const currentQty = inv ? inv.quantity : 0;
-    if (currentQty < quantity) {
-      alert(`在庫が不足しています（現在の在庫: ${currentQty}）`);
-      return;
-    }
+    const newQty = currentQty - quantity; // 在庫不足ならマイナスになる
 
-    // 2. 履歴追加（出庫）
+    // 2. 履歴追加（選択中の担当者、マスタ単価・合計金額を記録）
     const { error: histErr } = await supabase.from('history').insert({
       barcode,
       store_name: storeName,
-      user_name: '-',
+      user_name: selectedUser,
       type: '出庫',
       quantity,
-      unit_price: 0,
-      total_amount: 0,
+      unit_price: unitPrice,
+      total_amount: totalAmount,
     });
 
     if (histErr) {
@@ -69,16 +89,26 @@ export default function OutboundPage() {
       return;
     }
 
-    // 3. 在庫数を減算
-    await supabase
-      .from('inventory')
-      .update({ quantity: currentQty - quantity })
-      .eq('id', inv.id);
+    // 3. 在庫数を更新（マイナス許容）
+    if (inv) {
+      await supabase
+        .from('inventory')
+        .update({ quantity: newQty })
+        .eq('id', inv.id);
+    } else {
+      // 在庫データすらない場合はマイナスから新規作成
+      await supabase.from('inventory').insert({
+        barcode,
+        store_name: storeName,
+        quantity: newQty,
+      });
+    }
 
-    alert(`出庫完了しました (${productName} -${quantity})`);
+    alert(`出庫完了しました (${productName} -${quantity})\n現在の在庫: ${newQty}`);
     setBarcode('');
     setProductName('');
     setQuantity(1);
+    setUnitPrice(0);
   };
 
   return (
@@ -93,6 +123,23 @@ export default function OutboundPage() {
           ホーム
         </Link>
       </div>
+
+      {/* 担当者切り替えタブ */}
+      <div className="flex bg-gray-200 p-1 rounded-xl mb-4">
+        {users.map((user) => (
+          <button
+            key={user}
+            type="button"
+            onClick={() => setSelectedUser(user)}
+            className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${
+              selectedUser === user ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            {user}
+          </button>
+        ))}
+      </div>
+
       <hr className="mb-4" />
 
       {!isScanning && (
@@ -131,7 +178,7 @@ export default function OutboundPage() {
             value={barcode}
             onChange={(e) => {
               setBarcode(e.target.value);
-              fetchProductInfo(e.target.value);
+              fetchProductInfo(e.target.value, storeName);
             }}
             required
             className="w-full p-3 border rounded-lg text-sm"
@@ -152,8 +199,28 @@ export default function OutboundPage() {
           />
         </div>
 
+        <div>
+          <label className="block text-xs font-bold text-gray-600 mb-1">単価 (マスタ自動設定・円)</label>
+          <input
+            type="number"
+            value={unitPrice}
+            readOnly
+            className="w-full p-3 border rounded-lg text-sm bg-gray-100 text-gray-600"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-bold text-gray-600 mb-1">出庫金額 合計 (円)</label>
+          <input
+            type="number"
+            value={quantity * unitPrice}
+            readOnly
+            className="w-full p-3 border rounded-lg text-sm bg-gray-100 font-bold text-gray-800"
+          />
+        </div>
+
         <button type="submit" className="w-full bg-gray-800 text-white p-5 rounded-xl font-bold text-lg shadow-lg mt-6">
-          出庫を確定する
+          出庫を確定する ({selectedUser})
         </button>
       </form>
     </main>
