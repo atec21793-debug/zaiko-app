@@ -5,6 +5,7 @@ import Link from 'next/link';
 
 export default function HistoryPage() {
   const [historyList, setHistoryList] = useState<any[]>([]);
+  const [productMap, setProductMap] = useState<{ [barcode: string]: string }>({});
   const [loading, setLoading] = useState(true);
 
   // 月ごとの集計用ステート (デフォルトは今月: YYYY-MM)
@@ -12,29 +13,42 @@ export default function HistoryPage() {
   const [selectedMonth, setSelectedMonth] = useState(currentMonthStr); 
   const [selectedUserForDetail, setSelectedUserForDetail] = useState<string | null>(null);
 
-  // 履歴データの取得
-  const fetchHistory = async () => {
+  // 履歴データと製品マスタを一括取得
+  const fetchData = async () => {
     setLoading(true);
-    const { data, error } = await supabase
+    
+    // 1. 製品マスタ（products）を取得してマップを作成
+    const { data: prodData } = await supabase.from('products').select('*');
+    const map: { [barcode: string]: string } = {};
+    if (prodData) {
+      prodData.forEach((p) => {
+        map[p.barcode] = p.name;
+      });
+    }
+    setProductMap(map);
+
+    // 2. 履歴（history）を取得
+    const { data: histData, error } = await supabase
       .from('history')
       .select('*')
       .order('created_at', { ascending: false });
 
     if (error) {
       console.error('Error fetching history:', error);
-    } else if (data) {
-      setHistoryList(data);
+    } else if (histData) {
+      setHistoryList(histData);
     }
     setLoading(false);
   };
 
   useEffect(() => {
-    fetchHistory();
+    fetchData();
   }, []);
 
   // 履歴の削除（取り消し処理 & 在庫・集計の自動補正）
   const handleDelete = async (item: any) => {
-    if (!confirm(`この履歴（${item.type}: ${item.barcode} 数量:${item.quantity}）を取り消しますか？\n在庫数も自動で元に戻ります。`)) {
+    const itemName = productMap[item.barcode] || item.barcode;
+    if (!confirm(`この履歴（${item.type}: ${itemName} 数量:${item.quantity}）を取り消しますか？\n在庫数も自動で元に戻ります。`)) {
       return;
     }
 
@@ -61,7 +75,7 @@ export default function HistoryPage() {
     }
 
     alert('取り消し処理が完了しました。');
-    fetchHistory();
+    fetchData();
   };
 
   // 選択された「月」でフィルタリング
@@ -86,23 +100,24 @@ export default function HistoryPage() {
     return summary;
   }, [filteredHistory]);
 
-  // タップされた出庫者が使った材料を全店舗合算で集計（選択中の月ベース）
+  // タップされた出庫者が使った材料を全店舗合算で集計（選択中の月ベース：材料名でグルーピング）
   const selectedUserMaterials = useMemo(() => {
     if (!selectedUserForDetail) return [];
-    const materialMap: { [barcode: string]: { barcode: string; quantity: number; totalAmount: number } } = {};
+    const materialMap: { [name: string]: { name: string; quantity: number; totalAmount: number } } = {};
 
     filteredHistory
       .filter((item) => item.type === '出庫' && item.user_name === selectedUserForDetail)
       .forEach((item) => {
-        if (!materialMap[item.barcode]) {
-          materialMap[item.barcode] = { barcode: item.barcode, quantity: 0, totalAmount: 0 };
+        const name = productMap[item.barcode] || `(未登録: ${item.barcode})`;
+        if (!materialMap[name]) {
+          materialMap[name] = { name, quantity: 0, totalAmount: 0 };
         }
-        materialMap[item.barcode].quantity += item.quantity;
-        materialMap[item.barcode].totalAmount += item.total_amount || 0;
+        materialMap[name].quantity += item.quantity;
+        materialMap[name].totalAmount += item.total_amount || 0;
       });
 
     return Object.values(materialMap);
-  }, [filteredHistory, selectedUserForDetail]);
+  }, [filteredHistory, selectedUserForDetail, productMap]);
 
   return (
     <main className="w-full max-w-full p-4">
@@ -156,7 +171,7 @@ export default function HistoryPage() {
         )}
       </div>
 
-      {/* 選択された出庫者の合算材料詳細エリア */}
+      {/* 選択された出庫者の合算材料詳細エリア（材料名表示） */}
       {selectedUserForDetail && (
         <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl mb-6 shadow-sm">
           <div className="flex justify-between items-center mb-2">
@@ -176,9 +191,9 @@ export default function HistoryPage() {
           ) : (
             <div className="space-y-1.5 max-h-48 overflow-y-auto">
               {selectedUserMaterials.map((m) => (
-                <div key={m.barcode} className="bg-white p-2 rounded border text-xs flex justify-between">
-                  <span>JAN: {m.barcode}</span>
-                  <span className="font-bold">合計数量: {m.quantity}個 (¥{m.totalAmount.toLocaleString()})</span>
+                <div key={m.name} className="bg-white p-2 rounded border text-xs flex justify-between items-center">
+                  <span className="font-bold text-gray-800">{m.name}</span>
+                  <span className="font-bold">合計: {m.quantity}個 (¥{m.totalAmount.toLocaleString()})</span>
                 </div>
               ))}
             </div>
@@ -186,7 +201,7 @@ export default function HistoryPage() {
         </div>
       )}
 
-      {/* 履歴一覧（時系列） */}
+      {/* 履歴一覧（時系列・材料名表示） */}
       <h2 className="font-bold text-base mb-3">入出庫履歴 ({filteredHistory.length}件)</h2>
       {loading ? (
         <p className="text-center text-gray-500 py-8">読み込み中...</p>
@@ -194,48 +209,51 @@ export default function HistoryPage() {
         <p className="text-center text-gray-500 py-8">該当する月の履歴はありません。</p>
       ) : (
         <div className="space-y-3">
-          {filteredHistory.map((item) => (
-            <div 
-              key={item.id} 
-              className={`p-3 rounded-xl border shadow-sm bg-white flex flex-col gap-1 text-sm ${
-                item.type === '入庫' ? 'border-l-4 border-l-blue-500' : 'border-l-4 border-l-green-500'
-              }`}
-            >
-              <div className="flex justify-between items-center text-xs text-gray-500">
-                <span>{new Date(item.created_at).toLocaleString('ja-JP')}</span>
-                <div className="flex items-center gap-2">
-                  <span className={`px-2 py-0.5 rounded font-bold text-xs ${
-                    item.type === '入庫' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
-                  }`}>
-                    {item.type}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(item)}
-                    className="text-red-500 hover:text-red-700 font-bold text-xs bg-red-50 px-2 py-0.5 rounded border border-red-200"
-                  >
-                    取り消し
-                  </button>
+          {filteredHistory.map((item) => {
+            const productName = productMap[item.barcode] || `(未登録: ${item.barcode})`;
+            return (
+              <div 
+                key={item.id} 
+                className={`p-3 rounded-xl border shadow-sm bg-white flex flex-col gap-1 text-sm ${
+                  item.type === '入庫' ? 'border-l-4 border-l-blue-500' : 'border-l-4 border-l-green-500'
+                }`}
+              >
+                <div className="flex justify-between items-center text-xs text-gray-500">
+                  <span>{new Date(item.created_at).toLocaleString('ja-JP')}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-0.5 rounded font-bold text-xs ${
+                      item.type === '入庫' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
+                    }`}>
+                      {item.type}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(item)}
+                      className="text-red-500 hover:text-red-700 font-bold text-xs bg-red-50 px-2 py-0.5 rounded border border-red-200"
+                    >
+                      取り消し
+                    </button>
+                  </div>
                 </div>
-              </div>
 
-              <div className="flex justify-between font-bold text-gray-800">
-                <span>JAN: {item.barcode}</span>
-                <span>{item.quantity} 個</span>
-              </div>
-
-              <div className="flex justify-between text-xs text-gray-600">
-                <span>店舗: {item.store_name}</span>
-                <span>担当: {item.user_name || '-'}</span>
-              </div>
-
-              {item.total_amount > 0 && (
-                <div className="text-right text-xs font-bold text-gray-700 mt-1">
-                  金額: ¥{item.total_amount.toLocaleString()} (単価: ¥{item.unit_price?.toLocaleString()})
+                <div className="flex justify-between font-bold text-gray-800">
+                  <span className="text-base">{productName}</span>
+                  <span>{item.quantity} 個</span>
                 </div>
-              )}
-            </div>
-          ))}
+
+                <div className="flex justify-between text-xs text-gray-600">
+                  <span>店舗: {item.store_name}</span>
+                  <span>担当: {item.user_name || '-'}</span>
+                </div>
+
+                {item.total_amount > 0 && (
+                  <div className="text-right text-xs font-bold text-gray-700 mt-1">
+                    金額: ¥{item.total_amount.toLocaleString()} (単価: ¥{item.unit_price?.toLocaleString()})
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </main>
