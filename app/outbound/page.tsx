@@ -17,7 +17,7 @@ export default function OutboundPage() {
   const users = ['天野', '佐々木'];
   const stores = ['カパス', '松尾', 'ロイヤル', '電材センター', 'プロストック', 'コーナン', '建デポ', 'ビバホーム', 'コメリ'];
 
-  // 商品名と単価を自動取得する（デバッグログ付き）
+  // 商品名と単価を安全に自動取得する
   const fetchProductAndPrice = async (code: string, store: string) => {
     if (!code) {
       setProductName('');
@@ -38,26 +38,26 @@ export default function OutboundPage() {
       setProductName('（未登録の材料・マスターで登録してください）');
     }
 
-    // 2. 店舗別単価（unit_prices）を検索
+    // 2. 店舗別単価（unit_prices）を複数ヒットに対応させて安全に取得 (.limit(1)を使用)
     console.log('🔍 単価検索実行 -> バーコード:', code, '/ 店舗名:', store);
     
-    const { data: priceData, error: priceErr } = await supabase
+    const { data: priceDataList, error: priceErr } = await supabase
       .from('unit_prices')
       .select('price')
       .eq('barcode', code)
       .eq('store_name', store)
-      .maybeSingle();
+      .limit(1);
 
     if (priceErr) {
       console.error('❌ 単価取得エラー:', priceErr);
     }
 
-    console.log('📦 取得できた単価データ:', priceData);
+    console.log('📦 取得できた単価データ:', priceDataList);
 
-    if (priceData && priceData.price !== null && priceData.price !== undefined) {
-      setUnitPrice(Number(priceData.price));
+    if (priceDataList && priceDataList.length > 0 && priceDataList[0].price !== null) {
+      setUnitPrice(Number(priceDataList[0].price));
     } else {
-      console.warn('⚠️ 一致する店舗別単価が見つかりませんでした。単価0円になります。');
+      console.warn('⚠️ 一致する店舗別単価が見つかりませんでした。');
       setUnitPrice(0);
     }
   };
