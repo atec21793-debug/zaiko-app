@@ -16,7 +16,7 @@ export default function OutboundPage() {
   const users = ['天野', '佐々木'];
   const stores = ['カパス', '松尾', 'ロイヤル', '電材センター', 'プロストック', 'コーナン', '建デポ', 'ビバホーム', 'コメリ'];
 
-  // 商品名を取得する（表示用）
+  // 商品名を取得する
   const fetchProductName = async (code: string) => {
     if (!code) {
       setProductName('');
@@ -52,33 +52,31 @@ export default function OutboundPage() {
       return;
     }
 
-    // ★送信の瞬間に、最新の単価（店舗別単価 ＞ 商品マスター単価の順）を確実に対象店舗から取得する
-    let currentUnitPrice = 0;
-
-    // 1. まず店舗別単価（unit_prices）をチェック
-    const { data: priceData } = await supabase
+    // ★重要：選択されている店舗（storeName）の unit_prices から単価を確実に取得する
+    let unitPrice = 0;
+    const { data: priceData, error: priceErr } = await supabase
       .from('unit_prices')
       .select('price')
       .eq('barcode', barcode)
       .eq('store_name', storeName)
       .single();
 
-    if (priceData && priceData.price !== undefined) {
-      currentUnitPrice = priceData.price;
+    if (priceData && priceData.price !== null && priceData.price !== undefined) {
+      unitPrice = Number(priceData.price);
     } else {
-      // 2. なければ製品マスター（products）の価格をチェック
+      // 店舗別単価が見つからない場合は、productsテーブルの price があればそれをフォールバック
       const { data: prodData } = await supabase
         .from('products')
-        .select('*')
+        .select('price')
         .eq('barcode', barcode)
         .single();
-
-      if (prodData) {
-        currentUnitPrice = prodData.price !== undefined ? prodData.price : (prodData.unit_price || 0);
+      
+      if (prodData && prodData.price !== null && prodData.price !== undefined) {
+        unitPrice = Number(prodData.price);
       }
     }
 
-    const totalAmount = quantity * currentUnitPrice;
+    const totalAmount = quantity * unitPrice;
 
     // 1. 現在の在庫数を取得
     const { data: inv } = await supabase
@@ -91,19 +89,19 @@ export default function OutboundPage() {
     const currentQty = inv ? inv.quantity : 0;
     const newQty = currentQty - quantity;
 
-    // 2. 履歴追加（確実に取得した単価と合計金額を記録）
+    // 2. 履歴追加（unit_price と total_amount を確実に記録）
     const { error: histErr } = await supabase.from('history').insert({
       barcode,
       store_name: storeName,
       user_name: selectedUser,
       type: '出庫',
       quantity,
-      unit_price: currentUnitPrice,
+      unit_price: unitPrice,
       total_amount: totalAmount,
     });
 
     if (histErr) {
-      alert('エラー: ' + histErr.message);
+      alert('履歴保存エラー: ' + histErr.message);
       return;
     }
 
@@ -121,7 +119,7 @@ export default function OutboundPage() {
       });
     }
 
-    alert(`出庫完了しました (${productName} -${quantity})\n単価: ¥${currentUnitPrice.toLocaleString()} / 合計: ¥${totalAmount.toLocaleString()}\n現在の在庫: ${newQty}`);
+    alert(`出庫完了しました (${productName} -${quantity})\n単価: ¥${unitPrice.toLocaleString()} / 合計: ¥${totalAmount.toLocaleString()}\n現在の在庫: ${newQty}`);
     setBarcode('');
     setProductName('');
     setQuantity(1);
