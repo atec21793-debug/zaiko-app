@@ -10,20 +10,18 @@ export default function OutboundPage() {
   const [productName, setProductName] = useState('');
   const [storeName, setStoreName] = useState('カパス');
   const [quantity, setQuantity] = useState(1);
-  const [unitPrice, setUnitPrice] = useState(0); // マスター単価
+  const [unitPrice, setUnitPrice] = useState(0); // 内部保持用（履歴・集計計算用）
   const [isScanning, setIsScanning] = useState(false);
   const scannedRef = useRef(false);
 
   const users = ['天野', '佐々木']; // 担当者一覧
   const stores = ['カパス', '松尾', 'ロイヤル', '電材センター', 'プロストック', 'コーナン', '建デポ', 'ビバホーム', 'コメリ'];
 
-  // 商品情報とマスター単価を取得
+  // 商品情報とマスター単価を取得（画面には表示しませんが履歴用に保持します）
   const fetchProductInfo = async (code: string) => {
-    // 1. 製品マスター（products）から商品名と価格を取得
     const { data: prod } = await supabase.from('products').select('*').eq('barcode', code).single();
     if (prod) {
       setProductName(prod.name);
-      // カラム名が price や unit_price などに対応できるように考慮
       const itemPrice = prod.price !== undefined ? prod.price : (prod.unit_price || 0);
       setUnitPrice(itemPrice);
     } else {
@@ -190,18 +188,6 @@ export default function OutboundPage() {
             required
             className="w-full p-3 border rounded-lg text-sm bg-white"
           />
-        </div>
-
-        {/* 自動取得される単価と合計金額の表示（入力不要） */}
-        <div className="bg-white p-3 border rounded-xl space-y-2 shadow-sm">
-          <div className="flex justify-between items-center text-xs">
-            <span className="text-gray-600 font-bold">マスター単価:</span>
-            <span className="font-bold text-gray-800">¥{unitPrice.toLocaleString()}</span>
-          </div>
-          <div className="flex justify-between items-center text-sm border-t pt-2">
-            <span className="text-gray-800 font-bold">出庫金額 合計:</span>
-            <span className="text-base font-black text-green-600">¥{(quantity * unitPrice).toLocaleString()}</span>
-          </div>
         </div>
 
         <button type="submit" className="w-full bg-gray-800 text-white p-5 rounded-xl font-bold text-lg shadow-lg mt-6">
