@@ -198,19 +198,17 @@ export default function InventoryPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
-        {/* ヘッダー部分：iPhoneなどの狭い画面でタイトルとボタンが重ならないよう修正 */}
-        <div className="flex items-start justify-between gap-3 mb-4">
-          <div>
-            <h1 className="text-2xl font-bold">在庫一覧</h1>
-            <p className="text-sm text-gray-500">各種部材はカテゴリーごとにまとめて表示されます。</p>
-          </div>
+        {/* ヘッダー部分：タイトルとホームボタンを最上部にすっきり横並び */}
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="text-2xl font-bold text-gray-800">在庫一覧</h1>
           <Link 
             href="/" 
-            className="shrink-0 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg shadow-sm font-bold text-sm transition"
+            className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg shadow-sm font-bold text-sm transition"
           >
             ホーム
           </Link>
         </div>
+        <p className="text-sm text-gray-500 mb-4">各種部材はカテゴリーごとにまとめて表示されます。</p>
         <hr className="mb-6" />
 
         {/* 検索バー */}
