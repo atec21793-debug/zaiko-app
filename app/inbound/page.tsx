@@ -4,6 +4,12 @@ import { supabase } from '../lib/supabaseClient';
 import BarcodeScanner from '../components/BarcodeScanner';
 import Link from 'next/link';
 
+type Product = {
+  barcode: string;
+  name: string;
+  model_number: string;
+};
+
 export default function InboundPage() {
   const [barcode, setBarcode] = useState('');
   const [productName, setProductName] = useState('');
@@ -12,7 +18,22 @@ export default function InboundPage() {
   const [isScanning, setIsScanning] = useState(false);
   const scannedRef = useRef(false);
 
+  // 登録済み材料のリストを保持するステート
+  const [productsList, setProductsList] = useState<Product[]>([]);
+
   const stores = ['カパス', '松尾', 'ロイヤル', '電材センター', 'プロストック', 'コーナン', '建デポ', 'ビバホーム', 'コメリ'];
+
+  // ページ読み込み時に材料マスタを全件取得
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const fetchProducts = async () => {
+    const { data, error } = await supabase.from('products').select('*').order('name', { ascending: true });
+    if (!error && data) {
+      setProductsList(data);
+    }
+  };
 
   const fetchProductInfo = async (code: string) => {
     const { data: prod } = await supabase.from('products').select('*').eq('barcode', code).single();
@@ -32,6 +53,20 @@ export default function InboundPage() {
     setTimeout(() => { scannedRef.current = false; }, 500);
   };
 
+  // ドロップダウンで材料が選択されたときの処理
+  const handleSelectProduct = (selectedBarcode: string) => {
+    if (!selectedBarcode) {
+      setBarcode('');
+      setProductName('');
+      return;
+    }
+    setBarcode(selectedBarcode);
+    const found = productsList.find((p) => p.barcode === selectedBarcode);
+    if (found) {
+      setProductName(found.name);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!barcode || quantity <= 0) {
@@ -39,7 +74,7 @@ export default function InboundPage() {
       return;
     }
 
-    // 1. 履歴追加（担当者なし・単価0として記録）
+    // 1. 履歴追加
     const { error: histErr } = await supabase.from('history').insert({
       barcode,
       store_name: storeName,
@@ -82,8 +117,8 @@ export default function InboundPage() {
     setQuantity(1);
   };
 
-  return (<main className="min-h-screen p-4 bg-gray-50">
-      {/* ヘッダー部分：材料登録画面と同じデザイン（右端に「ホーム」ボタン） */}
+  return (
+    <main className="min-h-screen p-4 bg-gray-50">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">入庫処理</h1>
         <Link 
@@ -99,7 +134,7 @@ export default function InboundPage() {
         <button 
           type="button"
           onClick={() => setIsScanning(true)} 
-          className="w-full bg-gray-700 text-white p-6 rounded-xl font-bold text-xl shadow-lg mb-8"
+          className="w-full bg-gray-700 text-white p-6 rounded-xl font-bold text-xl shadow-lg mb-6"
         >
           バーコードを読み取る
         </button>
@@ -115,7 +150,6 @@ export default function InboundPage() {
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-xs font-bold text-gray-600 mb-1">対象店舗</label>
-          {/* text-base に変更して自動拡大を防止 */}
           <select
             value={storeName}
             onChange={(e) => setStoreName(e.target.value)}
@@ -125,9 +159,25 @@ export default function InboundPage() {
           </select>
         </div>
 
+        {/* 追加：登録済み材料から選べるドロップダウン */}
+        <div>
+          <label className="block text-xs font-bold text-gray-600 mb-1">登録済み材料から選択</label>
+          <select
+            value={barcode}
+            onChange={(e) => handleSelectProduct(e.target.value)}
+            className="w-full p-3 border rounded-lg bg-white text-base"
+          >
+            <option value="">-- リストから選択またはバーコード入力 --</option>
+            {productsList.map((p) => (
+              <option key={p.barcode} value={p.barcode}>
+                {p.name} {p.model_number ? `(${p.model_number})` : ''} - [{p.barcode}]
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div>
           <label className="block text-xs font-bold text-gray-600 mb-1">JANコード</label>
-          {/* text-base に変更して自動拡大を防止 */}
           <input
             type="text"
             value={barcode}
@@ -144,7 +194,6 @@ export default function InboundPage() {
 
         <div>
           <label className="block text-xs font-bold text-gray-600 mb-1">入庫数量</label>
-          {/* text-base に変更して自動拡大を防止 */}
           <input
             type="number"
             value={quantity}
