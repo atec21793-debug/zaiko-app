@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import Link from 'next/link';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -30,11 +31,10 @@ type InventoryItem = {
   color: string;
 };
 
-// 「頭」と「L頭」を別々に定義
 const CATEGORIES = [
   { key: 'ダクト', label: 'ダクト類', matchName: 'ダクト' },
   { key: 'ジョイント', label: 'ジョイント', matchName: 'ジョイント' },
-  { key: 'L頭', label: 'L頭', matchName: 'L頭' }, // 先に判定させることで「L頭」を「頭」から除外する
+  { key: 'L頭', label: 'L頭', matchName: 'L頭' },
   { key: '頭', label: '頭', matchName: '頭' },
   { key: '90', label: '90', matchName: '90' },
   { key: '45', label: '45', matchName: '45' },
@@ -198,20 +198,30 @@ export default function InventoryPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
+        {/* ヘッダー部分（右端にホームボタンを追加） */}
+        <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">在庫一覧</h1>
+            <h1 className="text-2xl font-bold">在庫一覧</h1>
             <p className="text-sm text-gray-500">各種部材はカテゴリーごとにまとめて表示されます。</p>
           </div>
-          <div className="w-full md:w-80">
-            <input
-              type="text"
-              placeholder="材料名、JAN、型番で検索..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-            />
-          </div>
+          <Link 
+            href="/" 
+            className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg shadow-sm font-bold text-sm transition"
+          >
+            ホーム
+          </Link>
+        </div>
+        <hr className="mb-6" />
+
+        {/* 検索バー */}
+        <div className="mb-6">
+          <input
+            type="text"
+            placeholder="材料名、JAN、型番で検索..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-base"
+          />
         </div>
 
         {loading ? (
