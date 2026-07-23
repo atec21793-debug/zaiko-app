@@ -30,14 +30,14 @@ type InventoryItem = {
   color: string;
 };
 
-// カテゴリーと判定キーワードの定義
+// 「頭」と「L頭」を別々に定義
 const CATEGORIES = [
-  { key: 'ダクト', label: '📦 ダクト類', matchName: 'ダクト' },
-  { key: 'ジョイント', label: '🔗 ジョイント類', matchName: 'ジョイント' },
-  { key: '頭', label: '🧢 頭 (ウォールコーナー等)', matchName: '頭' },
-  { key: 'L頭', label: '🧢 L頭 (ツバ付ウォール等)', matchName: 'L頭' },
-  { key: '90', label: '📐 90°曲り', matchName: '90' },
-  { key: '45', label: '📐 45°曲り', matchName: '45' },
+  { key: 'ダクト', label: 'ダクト類', matchName: 'ダクト' },
+  { key: 'ジョイント', label: 'ジョイント', matchName: 'ジョイント' },
+  { key: 'L頭', label: 'L頭', matchName: 'L頭' }, // 先に判定させることで「L頭」を「頭」から除外する
+  { key: '頭', label: '頭', matchName: '頭' },
+  { key: '90', label: '90', matchName: '90' },
+  { key: '45', label: '45', matchName: '45' },
 ];
 
 export default function InventoryPage() {
@@ -46,7 +46,6 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState<string>('');
   
-  // 開閉状態の管理ステート
   const [expandedItems, setExpandedItems] = useState<{ [key: string]: boolean }>({});
 
   useEffect(() => {
@@ -146,7 +145,6 @@ export default function InventoryPage() {
       item.model_number.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-  // 店舗別内訳コンポーネント
   const StoreQuantities = ({ item }: { item: InventoryItem }) => (
     <div className="bg-gray-50 px-4 py-4 sm:px-5 border-t border-gray-100 mt-[-1px]">
       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">店舗別在庫内訳</p>
@@ -164,7 +162,6 @@ export default function InventoryPage() {
     </div>
   );
 
-  // アイテム行コンポーネント
   const ItemHeader = ({ item, level = 1 }: { item: InventoryItem; level?: number }) => {
     const isExpanded = !!expandedItems[`item:${item.barcode}`];
     const paddingClass = level === 1 ? 'p-4 sm:p-5' : 'pl-12 pr-4 py-3';
