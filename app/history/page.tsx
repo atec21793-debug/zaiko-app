@@ -13,6 +13,10 @@ export default function HistoryPage() {
   const [selectedMonth, setSelectedMonth] = useState(currentMonthStr); 
   const [selectedUserForDetail, setSelectedUserForDetail] = useState<string | null>(null);
 
+  // 価格編集中・または編集中の履歴IDを保持するステート
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editUnitPrice, setEditUnitPrice] = useState<number>(0);
+
   // 履歴データと製品マスタを取得
   const fetchData = async () => {
     setLoading(true);
@@ -79,6 +83,33 @@ export default function HistoryPage() {
     fetchData();
   };
 
+  // 価格修正の保存処理
+  const handleSavePrice = async (item: any) => {
+    const newUnitPrice = Number(editUnitPrice);
+    if (isNaN(newUnitPrice) || newUnitPrice < 0) {
+      alert('正しい単価を入力してください');
+      return;
+    }
+
+    const newTotalAmount = newUnitPrice * item.quantity;
+
+    const { error } = await supabase
+      .from('history')
+      .update({
+        unit_price: newUnitPrice,
+        total_amount: newTotalAmount,
+      })
+      .eq('id', item.id);
+
+    if (error) {
+      alert('価格の修正に失敗しました: ' + error.message);
+    } else {
+      alert('出庫価格を修正しました！');
+      setEditingId(null);
+      fetchData(); // データを再取得して表示を更新
+    }
+  };
+
   // 選択された「月」でフィルタリング
   const filteredHistory = useMemo(() => {
     return historyList.filter((item) => {
@@ -96,7 +127,6 @@ export default function HistoryPage() {
     filteredHistory
       .filter((item) => item.type === '出庫' && item.user_name && item.user_name !== '-')
       .forEach((item) => {
-        // 保存されている total_amount があればそれを使用、なければ 単価 × 数量 で計算
         const amount = item.total_amount !== undefined && item.total_amount !== null 
           ? Number(item.total_amount) 
           : (Number(item.unit_price || 0) * item.quantity);
@@ -144,7 +174,7 @@ export default function HistoryPage() {
       </div>
       <hr className="mb-4" />
 
-      {/* 月選択フィルター（text-baseにしてスマホでの自動拡大を防止） */}
+      {/* 月選択フィルター */}
       <div className="bg-white p-3 rounded-xl border shadow-sm mb-4">
         <label className="block text-xs font-bold text-gray-600 mb-1">表示する月を選択</label>
         <input 
@@ -224,9 +254,9 @@ export default function HistoryPage() {
             const prodInfo = productMap[item.barcode];
             const productName = prodInfo ? prodInfo.name : `(未登録: ${item.barcode})`;
             
-            // 履歴に保存されている単価・合計金額を優先して使用
             const unitPrice = item.unit_price !== undefined && item.unit_price !== null ? Number(item.unit_price) : 0;
             const totalAmount = item.total_amount !== undefined && item.total_amount !== null ? Number(item.total_amount) : (unitPrice * item.quantity);
+            const isEditing = editingId === item.id;
 
             return (
               <div 
@@ -263,9 +293,55 @@ export default function HistoryPage() {
                   <span>担当: {item.user_name || '-'}</span>
                 </div>
 
-                {item.type === '出庫' && unitPrice > 0 && (
-                  <div className="text-right text-xs font-bold text-gray-700 mt-1">
-                    金額: ¥{totalAmount.toLocaleString()} (単価: ¥{unitPrice.toLocaleString()})
+                {/* 出庫の場合のみ金額表示と「価格修正」ボタンを設置 */}
+                {item.type === '出庫' && (
+                  <div className="mt-2 pt-2 border-t border-gray-100">
+                    {!isEditing ? (
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="font-bold text-gray-700">
+                          金額: ¥{totalAmount.toLocaleString()} (単価: ¥{unitPrice.toLocaleString()})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingId(item.id);
+                            setEditUnitPrice(unitPrice);
+                          }}
+                          className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded font-bold text-[11px] border"
+                        >
+                          金額を修正
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 bg-gray-50 p-2 rounded border">
+                        <div className="flex-1">
+                          <label className="block text-[10px] font-bold text-gray-600 mb-0.5">新しい単価を入力</label>
+                          <input
+                            type="number"
+                            value={editUnitPrice}
+                            onChange={(e) => setEditUnitPrice(Number(e.target.value))}
+                            className="w-full p-1.5 border rounded text-xs bg-white font-bold text-green-700"
+                            min="0"
+                          />
+                        </div>
+                        <div className="flex gap-1 pt-4">
+                          <button
+                            type="button"
+                            onClick={() => handleSavePrice(item)}
+                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold text-xs shadow-xs"
+                          >
+                            保存
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingId(null)}
+                            className="px-2 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded font-bold text-xs"
+                          >
+                            キャンセル
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
