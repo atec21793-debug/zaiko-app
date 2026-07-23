@@ -198,8 +198,8 @@ export default function InventoryPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
-        {/* ヘッダー部分：タイトルとホームボタンを最上部にすっきり横並び */}
-        <div className="flex items-center justify-between mb-2">
+        {/* ヘッダー部分：説明文を削除してスッキリ */}
+        <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-bold text-gray-800">在庫一覧</h1>
           <Link 
             href="/" 
@@ -208,7 +208,6 @@ export default function InventoryPage() {
             ホーム
           </Link>
         </div>
-        <p className="text-sm text-gray-500 mb-4">各種部材はカテゴリーごとにまとめて表示されます。</p>
         <hr className="mb-6" />
 
         {/* 検索バー */}
