@@ -15,7 +15,7 @@ export default function OutboundPage() {
   const [barcode, setBarcode] = useState('');
   const [productName, setProductName] = useState('');
   const [storeName, setStoreName] = useState('カパス');
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState(0);
   const [unitPrice, setUnitPrice] = useState<number>(0);
   const [isScanning, setIsScanning] = useState(false);
   const scannedRef = useRef(false);
