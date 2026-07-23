@@ -4,6 +4,12 @@ import { supabase } from '../lib/supabaseClient';
 import BarcodeScanner from '../components/BarcodeScanner';
 import Link from 'next/link';
 
+type Product = {
+  barcode: string;
+  name: string;
+  model_number: string;
+};
+
 export default function OutboundPage() {
   const [selectedUser, setSelectedUser] = useState('天野');
   const [barcode, setBarcode] = useState('');
@@ -14,8 +20,23 @@ export default function OutboundPage() {
   const [isScanning, setIsScanning] = useState(false);
   const scannedRef = useRef(false);
 
+  // 登録済み材料のリストを保持するステート
+  const [productsList, setProductsList] = useState<Product[]>([]);
+
   const users = ['天野', '佐々木'];
   const stores = ['カパス', '松尾', 'ロイヤル', '電材センター', 'プロストック', 'コーナン', '建デポ', 'ビバホーム', 'コメリ'];
+
+  // ページ読み込み時に材料マスタを全件取得
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const fetchProducts = async () => {
+    const { data, error } = await supabase.from('products').select('*').order('name', { ascending: true });
+    if (!error && data) {
+      setProductsList(data);
+    }
+  };
 
   // 商品名と単価を安全に自動取得する
   const fetchProductAndPrice = async (code: string, store: string) => {
@@ -39,8 +60,6 @@ export default function OutboundPage() {
     }
 
     // 2. 店舗別単価（unit_prices）を複数ヒットに対応させて安全に取得 (.limit(1)を使用)
-    console.log('🔍 単価検索実行 -> バーコード:', code, '/ 店舗名:', store);
-    
     const { data: priceDataList, error: priceErr } = await supabase
       .from('unit_prices')
       .select('price')
@@ -52,12 +71,9 @@ export default function OutboundPage() {
       console.error('❌ 単価取得エラー:', priceErr);
     }
 
-    console.log('📦 取得できた単価データ:', priceDataList);
-
     if (priceDataList && priceDataList.length > 0 && priceDataList[0].price !== null) {
       setUnitPrice(Number(priceDataList[0].price));
     } else {
-      console.warn('⚠️ 一致する店舗別単価が見つかりませんでした。');
       setUnitPrice(0);
     }
   };
@@ -75,6 +91,21 @@ export default function OutboundPage() {
     setIsScanning(false);
     fetchProductAndPrice(text, storeName);
     setTimeout(() => { scannedRef.current = false; }, 500);
+  };
+
+  // ドロップダウンで材料が選択されたときの処理
+  const handleSelectProduct = (selectedBarcode: string) => {
+    if (!selectedBarcode) {
+      setBarcode('');
+      setProductName('');
+      setUnitPrice(0);
+      return;
+    }
+    setBarcode(selectedBarcode);
+    const found = productsList.find((p) => p.barcode === selectedBarcode);
+    if (found) {
+      setProductName(found.name);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -168,7 +199,7 @@ export default function OutboundPage() {
         <button 
           type="button"
           onClick={() => setIsScanning(true)} 
-          className="w-full bg-gray-700 text-white p-6 rounded-xl font-bold text-xl shadow-lg mb-8"
+          className="w-full bg-gray-700 text-white p-6 rounded-xl font-bold text-xl shadow-lg mb-6"
         >
           バーコードを読み取る
         </button>
@@ -193,6 +224,23 @@ export default function OutboundPage() {
           </select>
         </div>
 
+        {/* 追加：登録済み材料から選べるドロップダウン */}
+        <div>
+          <label className="block text-xs font-bold text-gray-600 mb-1">登録済み材料から選択</label>
+          <select
+            value={barcode}
+            onChange={(e) => handleSelectProduct(e.target.value)}
+            className="w-full p-3 border rounded-lg bg-white text-base"
+          >
+            <option value="">-- リストから選択またはバーコード入力 --</option>
+            {productsList.map((p) => (
+              <option key={p.barcode} value={p.barcode}>
+                {p.name} {p.model_number ? `(${p.model_number})` : ''} - [{p.barcode}]
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div>
           <label className="block text-xs font-bold text-gray-600 mb-1">JANコード</label>
           <input
@@ -200,7 +248,7 @@ export default function OutboundPage() {
             value={barcode}
             onChange={(e) => setBarcode(e.target.value)}
             required
-            className="w-full p-3 border rounded-lg text-sm bg-white"
+            className="w-full p-3 border rounded-lg text-base bg-white"
             placeholder="バーコード入力"
           />
           <p className="text-xs font-bold text-gray-700 mt-1">{productName}</p>
@@ -214,7 +262,7 @@ export default function OutboundPage() {
             onChange={(e) => setUnitPrice(Number(e.target.value))}
             min="0"
             required
-            className="w-full p-3 border rounded-lg text-sm bg-white font-bold text-green-700"
+            className="w-full p-3 border rounded-lg text-base bg-white font-bold text-green-700"
           />
         </div>
 
@@ -226,7 +274,7 @@ export default function OutboundPage() {
             onChange={(e) => setQuantity(Number(e.target.value))}
             min="1"
             required
-            className="w-full p-3 border rounded-lg text-sm bg-white"
+            className="w-full p-3 border rounded-lg text-base bg-white"
           />
         </div>
 
