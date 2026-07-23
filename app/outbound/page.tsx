@@ -15,7 +15,7 @@ export default function OutboundPage() {
   const [barcode, setBarcode] = useState('');
   const [productName, setProductName] = useState('');
   const [storeName, setStoreName] = useState('カパス');
-  const [quantity, setQuantity] = useState(0);
+  const [quantity, setQuantity] = useState<number | ''>(''); // 初期値を空欄に変更
   const [unitPrice, setUnitPrice] = useState<number>(0);
   const [isScanning, setIsScanning] = useState(false);
   const scannedRef = useRef(false);
@@ -110,13 +110,14 @@ export default function OutboundPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!barcode || quantity <= 0) {
+    const qtyNum = Number(quantity);
+    if (!barcode || quantity === '' || qtyNum <= 0) {
       alert('バーコードと正しい数量を入力してください');
       return;
     }
 
     const currentUnitPrice = Number(unitPrice) || 0;
-    const totalAmount = quantity * currentUnitPrice;
+    const totalAmount = qtyNum * currentUnitPrice;
 
     // 1. 現在の在庫数を取得
     const { data: inv } = await supabase
@@ -127,7 +128,7 @@ export default function OutboundPage() {
       .maybeSingle();
 
     const currentQty = inv ? inv.quantity : 0;
-    const newQty = currentQty - quantity;
+    const newQty = currentQty - qtyNum;
 
     // 2. 履歴追加
     const { error: histErr } = await supabase.from('history').insert({
@@ -135,7 +136,7 @@ export default function OutboundPage() {
       store_name: storeName,
       user_name: selectedUser,
       type: '出庫',
-      quantity,
+      quantity: qtyNum,
       unit_price: currentUnitPrice,
       total_amount: totalAmount,
     });
@@ -159,10 +160,10 @@ export default function OutboundPage() {
       });
     }
 
-    alert(`出庫完了しました (${productName} -${quantity})\n単価: ¥${currentUnitPrice.toLocaleString()} / 合計: ¥${totalAmount.toLocaleString()}\n現在の在庫: ${newQty}`);
+    alert(`出庫完了しました (${productName} -${qtyNum})\n単価: ¥${currentUnitPrice.toLocaleString()} / 合計: ¥${totalAmount.toLocaleString()}\n現在の在庫: ${newQty}`);
     setBarcode('');
     setProductName('');
-    setQuantity(1);
+    setQuantity('');
     setUnitPrice(0);
   };
 
@@ -224,7 +225,6 @@ export default function OutboundPage() {
           </select>
         </div>
 
-        {/* 追加：登録済み材料から選べるドロップダウン */}
         <div>
           <label className="block text-xs font-bold text-gray-600 mb-1">登録済み材料から選択</label>
           <select
@@ -271,9 +271,10 @@ export default function OutboundPage() {
           <input
             type="number"
             value={quantity}
-            onChange={(e) => setQuantity(Number(e.target.value))}
-            min=""
+            onChange={(e) => setQuantity(e.target.value === '' ? '' : Number(e.target.value))}
+            min="1"
             required
+            placeholder="数量を入力"
             className="w-full p-3 border rounded-lg text-base bg-white"
           />
         </div>
