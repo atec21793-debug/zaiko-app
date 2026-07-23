@@ -272,7 +272,7 @@ export default function OutboundPage() {
             type="number"
             value={quantity}
             onChange={(e) => setQuantity(Number(e.target.value))}
-            min="1"
+            min=""
             required
             className="w-full p-3 border rounded-lg text-base bg-white"
           />
