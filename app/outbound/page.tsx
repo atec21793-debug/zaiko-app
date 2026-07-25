@@ -20,24 +20,11 @@ export default function OutboundPage() {
   const [isScanning, setIsScanning] = useState(false);
   const scannedRef = useRef(false);
 
-  // 登録済み材料のリスト
+  // 登録済み材料のリストを保持するステート
   const [productsList, setProductsList] = useState<Product[]>([]);
-
-  // 2段階セレクト用のステート
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
 
   const users = ['天野', '佐々木'];
   const stores = ['カパス', '松尾', 'ロイヤル', '電材センター', 'プロストック', 'コーナン', '建デポ', 'ビバホーム', 'コメリ'];
-  
-  // カテゴリの選択肢
-  const categories = [
-    { label: '頭', keyword: '頭', excludeKeyword: 'L頭' },
-    { label: 'L頭', keyword: 'L頭', excludeKeyword: '' },
-    { label: 'ダクト', keyword: 'ダクト', excludeKeyword: '' },
-    { label: '90', keyword: '90', excludeKeyword: '' },
-    { label: '45', keyword: '45', excludeKeyword: '' },
-    { label: 'ジョイント', keyword: 'ジョイント', excludeKeyword: '' },
-  ];
 
   // ページ読み込み時に材料マスタを全件取得
   useEffect(() => {
@@ -71,12 +58,16 @@ export default function OutboundPage() {
       setProductName('（未登録の材料・マスターで登録してください）');
     }
 
-    const { data: priceDataList } = await supabase
+    const { data: priceDataList, error: priceErr } = await supabase
       .from('unit_prices')
       .select('price')
       .eq('barcode', code)
       .eq('store_name', store)
       .limit(1);
+
+    if (priceErr) {
+      console.error('❌ 単価取得エラー:', priceErr);
+    }
 
     if (priceDataList && priceDataList.length > 0 && priceDataList[0].price !== null) {
       setUnitPrice(Number(priceDataList[0].price));
@@ -100,27 +91,7 @@ export default function OutboundPage() {
     setTimeout(() => { scannedRef.current = false; }, 500);
   };
 
-  // 1段階目で選ばれたカテゴリに応じて、材料リストを絞り込む（スリムダクトは除外）
-  const filteredProductsBySubCategory = useMemo(() => {
-    return productsList.filter((p) => {
-      // 常に「スリムダクト」が含まれるものは省く
-      if (p.name.includes('スリムダクト')) return false;
-
-      if (!selectedCategory) return false;
-
-      const catObj = categories.find(c => c.label === selectedCategory);
-      if (!catObj) return false;
-
-      // 「頭」の場合は「L頭」を混入させない
-      if (catObj.label === '頭') {
-        return p.name.includes('頭') && !p.name.includes('L頭');
-      }
-
-      return p.name.includes(catObj.keyword);
-    });
-  }, [productsList, selectedCategory]);
-
-  // 材料が選択されたときの処理
+  // ドロップダウンで材料が選択されたときの処理
   const handleSelectProduct = (selectedBarcode: string) => {
     if (!selectedBarcode) {
       setBarcode('');
@@ -134,6 +105,41 @@ export default function OutboundPage() {
       setProductName(found.name);
     }
   };
+
+  // スリムダクトを除外しつつ、各カテゴリに商品を振り分ける
+  const categorizedProducts = useMemo(() => {
+    const validProducts = productsList.filter(p => !p.name.includes('スリムダクト'));
+
+    const groups = {
+      head: [] as Product[],      // 頭（L頭は除く）
+      lHead: [] as Product[],     // L頭
+      duct: [] as Product[],     // ダクト
+      deg90: [] as Product[],    // 90
+      deg45: [] as Product[],    // 45
+      joint: [] as Product[],    // ジョイント
+      others: [] as Product[],   // その他
+    };
+
+    validProducts.forEach(p => {
+      if (p.name.includes('L頭')) {
+        groups.lHead.push(p);
+      } else if (p.name.includes('頭')) {
+        groups.head.push(p);
+      } else if (p.name.includes('ダクト')) {
+        groups.duct.push(p);
+      } else if (p.name.includes('90')) {
+        groups.deg90.push(p);
+      } else if (p.name.includes('45')) {
+        groups.deg45.push(p);
+      } else if (p.name.includes('ジョイント')) {
+        groups.joint.push(p);
+      } else {
+        groups.others.push(p);
+      }
+    });
+
+    return groups;
+  }, [productsList]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -189,7 +195,6 @@ export default function OutboundPage() {
     setProductName('');
     setQuantity('');
     setUnitPrice(0);
-    setSelectedCategory('');
   };
 
   return (
@@ -250,44 +255,85 @@ export default function OutboundPage() {
           </select>
         </div>
 
-        {/* 1段階目：カテゴリ選択のドロップダウン */}
+        {/* 1つのドロップダウンに「頭」「ダクト」「45」「90」「ジョイント」等をグループ化 */}
         <div>
-          <label className="block text-xs font-bold text-gray-600 mb-1">1. カテゴリを選択</label>
-          <select
-            value={selectedCategory}
-            onChange={(e) => {
-              setSelectedCategory(e.target.value);
-              setBarcode(''); // カテゴリ変更時に選択をリセット
-              setProductName('');
-            }}
-            className="w-full p-3 border rounded-lg bg-white text-base font-bold text-gray-800"
-          >
-            <option value="">-- まずカテゴリを選択してください --</option>
-            {categories.map((c) => (
-              <option key={c.label} value={c.label}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* 2段階目：選ばれたカテゴリ内の材料を選ぶドロップダウン */}
-        <div>
-          <label className="block text-xs font-bold text-gray-600 mb-1">2. 材料を選択</label>
+          <label className="block text-xs font-bold text-gray-600 mb-1">登録済み材料から選択</label>
           <select
             value={barcode}
             onChange={(e) => handleSelectProduct(e.target.value)}
-            disabled={!selectedCategory}
-            className="w-full p-3 border rounded-lg bg-white text-base font-bold text-gray-800 disabled:bg-gray-100 disabled:text-gray-400"
+            className="w-full p-3 border rounded-lg bg-white text-base font-bold text-gray-800"
           >
-            <option value="">
-              {!selectedCategory ? '-- 先に上のカテゴリを選択してください --' : '-- 材料を選択してください --'}
-            </option>
-            {filteredProductsBySubCategory.map((p) => (
-              <option key={p.barcode} value={p.barcode}>
-                {p.name} {p.model_number ? `(${p.model_number})` : ''}
-              </option>
-            ))}
+            <option value="">-- リストから選択またはバーコード入力 --</option>
+            
+            {categorizedProducts.head.length > 0 && (
+              <optgroup label="【頭】">
+                {categorizedProducts.head.map((p) => (
+                  <option key={p.barcode} value={p.barcode}>
+                    {p.name} {p.model_number ? `(${p.model_number})` : ''}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+
+            {categorizedProducts.lHead.length > 0 && (
+              <optgroup label="【L頭】">
+                {categorizedProducts.lHead.map((p) => (
+                  <option key={p.barcode} value={p.barcode}>
+                    {p.name} {p.model_number ? `(${p.model_number})` : ''}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+
+            {categorizedProducts.duct.length > 0 && (
+              <optgroup label="【ダクト】">
+                {categorizedProducts.duct.map((p) => (
+                  <option key={p.barcode} value={p.barcode}>
+                    {p.name} {p.model_number ? `(${p.model_number})` : ''}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+
+            {categorizedProducts.deg90.length > 0 && (
+              <optgroup label="【90】">
+                {categorizedProducts.deg90.map((p) => (
+                  <option key={p.barcode} value={p.barcode}>
+                    {p.name} {p.model_number ? `(${p.model_number})` : ''}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+
+            {categorizedProducts.deg45.length > 0 && (
+              <optgroup label="【45】">
+                {categorizedProducts.deg45.map((p) => (
+                  <option key={p.barcode} value={p.barcode}>
+                    {p.name} {p.model_number ? `(${p.model_number})` : ''}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+
+            {categorizedProducts.joint.length > 0 && (
+              <optgroup label="【ジョイント】">
+                {categorizedProducts.joint.map((p) => (
+                  <option key={p.barcode} value={p.barcode}>
+                    {p.name} {p.model_number ? `(${p.model_number})` : ''}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+
+            {categorizedProducts.others.length > 0 && (
+              <optgroup label="【その他】">
+                {categorizedProducts.others.map((p) => (
+                  <option key={p.barcode} value={p.barcode}>
+                    {p.name} {p.model_number ? `(${p.model_number})` : ''}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
         </div>
 
