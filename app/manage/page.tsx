@@ -15,6 +15,12 @@ export default function ManagePage() {
   const [products, setProducts] = useState<any[]>([]); // 材料リスト用
   const scannedRef = useRef(false);
 
+  // 一括編集モード用のステート
+  const [isBatchMode, setIsBatchMode] = useState(false);
+  const [batchKeywords, setBatchKeywords] = useState('頭, ダクト, 90, 45, ジョイント, L頭');
+  const [batchFilteredProducts, setBatchFilteredProducts] = useState<any[]>([]);
+  const [commonStorePrices, setCommonStorePrices] = useState<{ [key: string]: string }>({});
+
   const stores = ['カパス', '松尾', 'ロイヤル', '電材センター', 'プロストック', 'コーナン', '建デポ', 'ビバホーム', 'コメリ'];
 
   // 初期読み込み：製品一覧を取得
@@ -25,6 +31,29 @@ export default function ManagePage() {
     };
     fetchProducts();
   }, []);
+
+  // 複数のキーワード（カンマやスペース区切り）いずれかに一致する商品を抽出
+  useEffect(() => {
+    if (!batchKeywords.trim()) {
+      setBatchFilteredProducts([]);
+      return;
+    }
+    // カンマまたはスペースでキーワードを分割し、空文字を除外
+    const keywords = batchKeywords
+      .split(/[,、\s]+/)
+      .map(k => k.trim())
+      .filter(Boolean);
+
+    if (keywords.length === 0) {
+      setBatchFilteredProducts([]);
+      return;
+    }
+
+    const filtered = products.filter(p => 
+      keywords.some(keyword => p.name.includes(keyword))
+    );
+    setBatchFilteredProducts(filtered);
+  }, [batchKeywords, products]);
 
   // JANコード変更時（またはリスト選択時）に、その商品の各店舗の単価を unit_prices から取得してセットする
   const fetchPricesForBarcode = async (code: string) => {
@@ -58,7 +87,6 @@ export default function ManagePage() {
     setFormData((prev) => ({ ...prev, barcode: text }));
     setIsScanning(false);
     
-    // スキャンしたJANコードに紐づく単価を読み込む
     const matchedProduct = products.find(p => p.barcode === text);
     if (matchedProduct) {
       setFormData({
@@ -94,127 +122,226 @@ export default function ManagePage() {
     alert('登録しました！');
   };
 
+  // 一括編集の保存処理（該当する全アイテムに対して同じ店舗単価などを適用）
+  const handleBatchSubmit = async () => {
+    if (batchFilteredProducts.length === 0) {
+      alert('対象の材料が見つかりません。');
+      return;
+    }
+
+    const updates: any[] = [];
+    batchFilteredProducts.forEach(prod => {
+      Object.entries(commonStorePrices).forEach(([store, price]) => {
+        if (price !== '' && price !== '0') {
+          updates.push({
+            barcode: prod.barcode,
+            store_name: store,
+            price: parseFloat(price)
+          });
+        }
+      });
+    });
+
+    if (updates.length > 0) {
+      const { error } = await supabase.from('unit_prices').upsert(updates);
+      if (error) {
+        alert('一括更新に失敗しました');
+        console.error(error);
+        return;
+      }
+    }
+
+    alert(`条件に一致する ${batchFilteredProducts.length} 件の単価を一括更新しました！`);
+    setIsBatchMode(false);
+  };
+
   return (
     <main className="w-full max-w-full min-h-screen p-4 bg-gray-50">
-      {/* ヘッダー部分：タイトルの右端に「ホーム」の文字ボタンを配置 */}
+      {/* ヘッダー部分 */}
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">材料登録・編集</h1>
-        <Link 
-          href="/" 
-          className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg shadow-sm font-bold text-sm transition"
-        >
-          ホーム
-        </Link>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setIsBatchMode(!isBatchMode)}
+            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm font-bold text-sm transition"
+          >
+            {isBatchMode ? '通常登録に戻る' : '複数キーワード一括編集'}
+          </button>
+          <Link 
+            href="/" 
+            className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg shadow-sm font-bold text-sm transition"
+          >
+            ホーム
+          </Link>
+        </div>
       </div>
       <hr className="mb-4" />
 
-      {!isScanning && (
-        <button 
-          type="button"
-          onClick={() => setIsScanning(true)} 
-          className="w-full bg-gray-700 text-white p-6 rounded-xl font-bold text-xl shadow-lg mb-8"
-        >
-          バーコードを読み取る
-        </button>
-      )}
+      {/* 一括編集モード */}
+      {isBatchMode ? (
+        <div className="space-y-6 bg-white p-4 rounded-xl shadow border">
+          <h2 className="text-xl font-bold text-gray-800 border-b pb-2">複数キーワード一括編集モード</h2>
+          <div>
+            <label className="block text-xs font-bold text-gray-600 mb-1">検索キーワード（カンマやスペース区切りで複数指定可）</label>
+            <input 
+              type="text" 
+              className="w-full p-3 border rounded-lg bg-white text-base font-bold" 
+              value={batchKeywords} 
+              onChange={(e) => setBatchKeywords(e.target.value)} 
+            />
+            <p className="text-xs text-gray-500 mt-1">例: 頭, ダクト, 90, 45, ジョイント, L頭</p>
+          </div>
 
-      {isScanning && (
-        <BarcodeScanner 
-          onScan={onScanSuccess} 
-          onClose={() => setIsScanning(false)} 
-        />
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-xs font-bold text-gray-600 mb-1">JANコード</label>
-          {/* text-base に変更して自動拡大を防止 */}
-          <input 
-            type="text" 
-            placeholder="JANコード" 
-            className="w-full p-3 border rounded-lg bg-white text-base" 
-            value={formData.barcode} 
-            onChange={(e) => {
-              const val = e.target.value;
-              setFormData({...formData, barcode: val});
-              fetchPricesForBarcode(val);
-            }} 
-            required 
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs font-bold text-gray-600 mb-1">材料名</label>
-          {/* text-base に変更して自動拡大を防止 */}
-          <input 
-            type="text" 
-            placeholder="材料名" 
-            className="w-full p-3 border rounded-lg bg-white text-base" 
-            value={formData.name} 
-            onChange={(e) => setFormData({...formData, name: e.target.value})} 
-            required 
-          />
-        </div>
-        
-        <div>
-          <label className="block text-xs font-bold text-gray-600 mb-1">型番</label>
-          {/* text-base に変更して自動拡大を防止 */}
-          <input 
-            type="text" 
-            placeholder="型番" 
-            className="w-full p-3 border rounded-lg bg-white text-base" 
-            value={formData.model_number} 
-            onChange={(e) => setFormData({...formData, model_number: e.target.value})} 
-          />
-        </div>
-        
-        {/* 登録済みリストから選択 */}
-        <div>
-          <label className="block text-xs font-bold text-gray-600 mb-1">登録済みリストから呼び出し</label>
-          {/* text-base に変更して自動拡大を防止 */}
-          <select 
-            className="w-full p-3 border rounded-lg bg-white text-gray-700 text-base font-bold"
-            value={formData.barcode}
-            onChange={(e) => {
-              const code = e.target.value;
-              const p = products.find(prod => prod.barcode === code);
-              if (p) {
-                setFormData({ barcode: p.barcode, name: p.name, model_number: p.model_number || '' });
-                fetchPricesForBarcode(p.barcode);
-              } else {
-                setFormData({ barcode: '', name: '', model_number: '' });
-                setPrices({});
-              }
-            }}
-          >
-            <option value="">-- リストから選択して編集 --</option>
-            {products.map(p => <option key={p.barcode} value={p.barcode}>{p.name} ({p.model_number || '型番なし'})</option>)}
-          </select>
-        </div>
-        
-        <div className="space-y-3 mt-6">
-          <h2 className="font-bold text-lg border-b pb-2">各店舗の仕入れ単価</h2>
-          {stores.map((store) => (
-            <div key={store} className="flex items-center gap-2 bg-white p-3 rounded-lg shadow-sm border">
-              <span className="w-28 text-sm font-bold text-gray-700">{store}</span>
-              {/* text-base に変更して自動拡大を防止 */}
-              <input 
-                type="number" 
-                inputMode="numeric" 
-                placeholder="単価" 
-                className="flex-1 p-2 border rounded-lg text-right text-base font-bold" 
-                value={prices[store] || ''} 
-                onChange={(e) => handlePriceChange(store, e.target.value)} 
-              />
-              <span className="text-sm text-gray-500 font-bold">円</span>
+          <div>
+            <h3 className="text-sm font-bold text-gray-700 mb-2">
+              対象商品一覧 ({batchFilteredProducts.length}件)
+            </h3>
+            <div className="max-h-48 overflow-y-auto border rounded-lg p-2 bg-gray-50 space-y-1">
+              {batchFilteredProducts.length > 0 ? (
+                batchFilteredProducts.map(p => (
+                  <div key={p.barcode} className="text-sm text-gray-700 flex justify-between border-b border-gray-100 pb-1">
+                    <span className="font-bold">{p.name}</span>
+                    <span className="text-gray-400 text-xs">{p.model_number || '型番なし'}</span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-gray-500">一致する材料がありません</p>
+              )}
             </div>
-          ))}
-        </div>
+          </div>
 
-        <button type="submit" className="w-full bg-gray-800 text-white p-5 rounded-xl font-bold text-lg shadow-lg mt-6">
-          一括登録する
-        </button>
-      </form>
+          <div className="space-y-3">
+            <h3 className="font-bold text-md border-b pb-1">一括適用する各店舗の仕入れ単価（空欄は変更なし）</h3>
+            {stores.map((store) => (
+              <div key={store} className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border">
+                <span className="w-28 text-sm font-bold text-gray-700">{store}</span>
+                <input 
+                  type="number" 
+                  inputMode="numeric" 
+                  placeholder="一括単価" 
+                  className="flex-1 p-2 border rounded-lg text-right text-base font-bold bg-white" 
+                  value={commonStorePrices[store] || ''} 
+                  onChange={(e) => setCommonStorePrices({ ...commonStorePrices, [store]: e.target.value })} 
+                />
+                <span className="text-sm text-gray-500 font-bold">円</span>
+              </div>
+            ))}
+          </div>
+
+          <button 
+            type="button" 
+            onClick={handleBatchSubmit}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-xl font-bold text-lg shadow-lg"
+          >
+            該当する材料 ({batchFilteredProducts.length}件) の単価を一括更新する
+          </button>
+        </div>
+      ) : (
+        <>
+          {!isScanning && (
+            <button 
+              type="button"
+              onClick={() => setIsScanning(true)} 
+              className="w-full bg-gray-700 text-white p-6 rounded-xl font-bold text-xl shadow-lg mb-8"
+            >
+              バーコードを読み取る
+            </button>
+          )}
+
+          {isScanning && (
+            <BarcodeScanner 
+              onScan={onScanSuccess} 
+              onClose={() => setIsScanning(false)} 
+            />
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-gray-600 mb-1">JANコード</label>
+              <input 
+                type="text" 
+                placeholder="JANコード" 
+                className="w-full p-3 border rounded-lg bg-white text-base" 
+                value={formData.barcode} 
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setFormData({...formData, barcode: val});
+                  fetchPricesForBarcode(val);
+                }} 
+                required 
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-600 mb-1">材料名</label>
+              <input 
+                type="text" 
+                placeholder="材料名" 
+                className="w-full p-3 border rounded-lg bg-white text-base" 
+                value={formData.name} 
+                onChange={(e) => setFormData({...formData, name: e.target.value})} 
+                required 
+              />
+            </div>
+            
+            <div>
+              <label className="block text-xs font-bold text-gray-600 mb-1">型番</label>
+              <input 
+                type="text" 
+                placeholder="型番" 
+                className="w-full p-3 border rounded-lg bg-white text-base" 
+                value={formData.model_number} 
+                onChange={(e) => setFormData({...formData, model_number: e.target.value})} 
+              />
+            </div>
+            
+            <div>
+              <label className="block text-xs font-bold text-gray-600 mb-1">登録済みリストから呼び出し</label>
+              <select 
+                className="w-full p-3 border rounded-lg bg-white text-gray-700 text-base font-bold"
+                value={formData.barcode}
+                onChange={(e) => {
+                  const code = e.target.value;
+                  const p = products.find(prod => prod.barcode === code);
+                  if (p) {
+                    setFormData({ barcode: p.barcode, name: p.name, model_number: p.model_number || '' });
+                    fetchPricesForBarcode(p.barcode);
+                  } else {
+                    setFormData({ barcode: '', name: '', model_number: '' });
+                    setPrices({});
+                  }
+                }}
+              >
+                <option value="">-- リストから選択して編集 --</option>
+                {products.map(p => <option key={p.barcode} value={p.barcode}>{p.name} ({p.model_number || '型番なし'})</option>)}
+              </select>
+            </div>
+            
+            <div className="space-y-3 mt-6">
+              <h2 className="font-bold text-lg border-b pb-2">各店舗の仕入れ単価</h2>
+              {stores.map((store) => (
+                <div key={store} className="flex items-center gap-2 bg-white p-3 rounded-lg shadow-sm border">
+                  <span className="w-28 text-sm font-bold text-gray-700">{store}</span>
+                  <input 
+                    type="number" 
+                    inputMode="numeric" 
+                    placeholder="単価" 
+                    className="flex-1 p-2 border rounded-lg text-right text-base font-bold" 
+                    value={prices[store] || ''} 
+                    onChange={(e) => handlePriceChange(store, e.target.value)} 
+                  />
+                  <span className="text-sm text-gray-500 font-bold">円</span>
+                </div>
+              ))}
+            </div>
+
+            <button type="submit" className="w-full bg-gray-800 text-white p-5 rounded-xl font-bold text-lg shadow-lg mt-6">
+              一括登録する
+            </button>
+          </form>
+        </>
+      )}
     </main>
   );
 }
