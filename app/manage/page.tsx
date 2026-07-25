@@ -17,11 +17,11 @@ export default function ManagePage() {
 
   // 一括編集モード用のステート
   const [isBatchMode, setIsBatchMode] = useState(false);
-  const [selectedKeyword, setSelectedKeyword] = useState('頭'); // デフォルトで「頭」を選択
+  const [selectedKeyword, setSelectedKeyword] = useState('頭'); 
   const [batchFilteredProducts, setBatchFilteredProducts] = useState<any[]>([]);
   const [commonStorePrices, setCommonStorePrices] = useState<{ [key: string]: string }>({});
 
-  // 選択肢の定義
+  // 選択肢の定義（「頭」選択時に「L頭」が巻き込まれないよう調整など）
   const batchCategories = [
     { label: '頭', keywords: ['頭'] },
     { label: 'ダクト', keywords: ['ダクト'] },
@@ -42,7 +42,7 @@ export default function ManagePage() {
     fetchProducts();
   }, []);
 
-  // 選択されたカテゴリに応じて商品を抽出
+  // 選択されたカテゴリに応じて商品を抽出しつつ、「スリムダクト」を省く
   useEffect(() => {
     const category = batchCategories.find(c => c.label === selectedKeyword);
     if (!category) {
@@ -50,9 +50,19 @@ export default function ManagePage() {
       return;
     }
 
-    const filtered = products.filter(p => 
-      category.keywords.some(keyword => p.name.includes(keyword))
-    );
+    const filtered = products.filter(p => {
+      // 名前に「スリムダクト」が含まれる場合は除外
+      if (p.name.includes('スリムダクト')) return false;
+
+      // 「頭」の場合は「L頭」を混入させないための厳密なチェック（必要に応じて調整）
+      if (selectedKeyword === '頭') {
+        // 「L頭」を含まず、かつ「頭」を含むもの
+        return p.name.includes('頭') && !p.name.includes('L頭');
+      }
+
+      return category.keywords.some(keyword => p.name.includes(keyword));
+    });
+
     setBatchFilteredProducts(filtered);
   }, [selectedKeyword, products]);
 
@@ -162,7 +172,6 @@ export default function ManagePage() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">材料登録・編集</h1>
         <div className="flex gap-2">
-          {/* 他のボタンに合わせたトーンに変更 */}
           <button
             type="button"
             onClick={() => setIsBatchMode(!isBatchMode)}
@@ -199,26 +208,10 @@ export default function ManagePage() {
             </select>
           </div>
 
-          <div>
-            <h3 className="text-sm font-bold text-gray-700 mb-2">
-              対象商品一覧 ({batchFilteredProducts.length}件)
-            </h3>
-            <div className="max-h-48 overflow-y-auto border rounded-lg p-2 bg-gray-50 space-y-1">
-              {batchFilteredProducts.length > 0 ? (
-                batchFilteredProducts.map(p => (
-                  <div key={p.barcode} className="text-sm text-gray-700 flex justify-between border-b border-gray-100 pb-1">
-                    <span className="font-bold">{p.name}</span>
-                    <span className="text-gray-400 text-xs">{p.model_number || '型番なし'}</span>
-                  </div>
-                ))
-              ) : (
-                <p className="text-xs text-gray-500">一致する材料がありません</p>
-              )}
-            </div>
-          </div>
-
           <div className="space-y-3">
-            <h3 className="font-bold text-md border-b pb-1">一括適用する各店舗の仕入れ単価（空欄は変更なし）</h3>
+            <h3 className="font-bold text-md border-b pb-1">
+              一括適用する各店舗の仕入れ単価 <span className="text-xs font-normal text-gray-500">（対象: {batchFilteredProducts.length}件 / 空欄は変更なし）</span>
+            </h3>
             {stores.map((store) => (
               <div key={store} className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border">
                 <span className="w-28 text-sm font-bold text-gray-700">{store}</span>
@@ -235,7 +228,6 @@ export default function ManagePage() {
             ))}
           </div>
 
-          {/* 他のメインボタンに合わせた背景色に変更 */}
           <button 
             type="button" 
             onClick={handleBatchSubmit}
