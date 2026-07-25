@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import BarcodeScanner from '../components/BarcodeScanner';
 import Link from 'next/link';
@@ -15,7 +15,7 @@ export default function OutboundPage() {
   const [barcode, setBarcode] = useState('');
   const [productName, setProductName] = useState('');
   const [storeName, setStoreName] = useState('カパス');
-  const [quantity, setQuantity] = useState<number | ''>(''); // 初期値を空欄に変更
+  const [quantity, setQuantity] = useState<number | ''>(''); 
   const [unitPrice, setUnitPrice] = useState<number>(0);
   const [isScanning, setIsScanning] = useState(false);
   const scannedRef = useRef(false);
@@ -107,6 +107,42 @@ export default function OutboundPage() {
       setProductName(found.name);
     }
   };
+
+  // スリムダクトを除外しつつ、各カテゴリに商品を振り分ける
+  const categorizedProducts = useMemo(() => {
+    // スコープ外・スリムダクト除外後のリスト
+    const validProducts = productsList.filter(p => !p.name.includes('スリムダクト'));
+
+    const groups = {
+      head: [] as Product[],      // 頭（L頭は除く）
+      lHead: [] as Product[],     // L頭
+      duct: [] as Product[],     // ダクト
+      deg90: [] as Product[],    // 90
+      deg45: [] as Product[],    // 45
+      joint: [] as Product[],    // ジョイント
+      others: [] as Product[],   // その他
+    };
+
+    validProducts.forEach(p => {
+      if (p.name.includes('L頭')) {
+        groups.lHead.push(p);
+      } else if (p.name.includes('頭')) {
+        groups.head.push(p);
+      } else if (p.name.includes('ダクト')) {
+        groups.duct.push(p);
+      } else if (p.name.includes('90')) {
+        groups.deg90.push(p);
+      } else if (p.name.includes('45')) {
+        groups.deg45.push(p);
+      } else if (p.name.includes('ジョイント')) {
+        groups.joint.push(p);
+      } else {
+        groups.others.push(p);
+      }
+    });
+
+    return groups;
+  }, [productsList]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -230,14 +266,79 @@ export default function OutboundPage() {
           <select
             value={barcode}
             onChange={(e) => handleSelectProduct(e.target.value)}
-            className="w-full p-3 border rounded-lg bg-white text-base"
+            className="w-full p-3 border rounded-lg bg-white text-base font-bold text-gray-800"
           >
             <option value="">-- リストから選択またはバーコード入力 --</option>
-            {productsList.map((p) => (
-              <option key={p.barcode} value={p.barcode}>
-                {p.name} {p.model_number ? `(${p.model_number})` : ''} - [{p.barcode}]
-              </option>
-            ))}
+            
+            {categorizedProducts.head.length > 0 && (
+              <optgroup label="【頭】">
+                {categorizedProducts.head.map((p) => (
+                  <option key={p.barcode} value={p.barcode}>
+                    {p.name} {p.model_number ? `(${p.model_number})` : ''}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+
+            {categorizedProducts.lHead.length > 0 && (
+              <optgroup label="【L頭】">
+                {categorizedProducts.lHead.map((p) => (
+                  <option key={p.barcode} value={p.barcode}>
+                    {p.name} {p.model_number ? `(${p.model_number})` : ''}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+
+            {categorizedProducts.duct.length > 0 && (
+              <optgroup label="【ダクト】">
+                {categorizedProducts.duct.map((p) => (
+                  <option key={p.barcode} value={p.barcode}>
+                    {p.name} {p.model_number ? `(${p.model_number})` : ''}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+
+            {categorizedProducts.deg90.length > 0 && (
+              <optgroup label="【90】">
+                {categorizedProducts.deg90.map((p) => (
+                  <option key={p.barcode} value={p.barcode}>
+                    {p.name} {p.model_number ? `(${p.model_number})` : ''}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+
+            {categorizedProducts.deg45.length > 0 && (
+              <optgroup label="【45】">
+                {categorizedProducts.deg45.map((p) => (
+                  <option key={p.barcode} value={p.barcode}>
+                    {p.name} {p.model_number ? `(${p.model_number})` : ''}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+
+            {categorizedProducts.joint.length > 0 && (
+              <optgroup label="【ジョイント】">
+                {categorizedProducts.joint.map((p) => (
+                  <option key={p.barcode} value={p.barcode}>
+                    {p.name} {p.model_number ? `(${p.model_number})` : ''}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+
+            {categorizedProducts.others.length > 0 && (
+              <optgroup label="【その他】">
+                {categorizedProducts.others.map((p) => (
+                  <option key={p.barcode} value={p.barcode}>
+                    {p.name} {p.model_number ? `(${p.model_number})` : ''}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
         </div>
 
