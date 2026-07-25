@@ -13,6 +13,10 @@ export default function HistoryPage() {
   const [selectedMonth, setSelectedMonth] = useState(currentMonthStr); 
   const [selectedUserForDetail, setSelectedUserForDetail] = useState<string | null>(null);
 
+  // 検索用のステート追加
+  const [searchStore, setSearchStore] = useState('');
+  const [searchMaterial, setSearchMaterial] = useState('');
+
   // 価格編集中・または編集中の履歴IDを保持するステート
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editUnitPrice, setEditUnitPrice] = useState<number>(0);
@@ -110,16 +114,32 @@ export default function HistoryPage() {
     }
   };
 
-  // 選択された「月」でフィルタリング
+  // 選択された「月」および「店舗・材料名」でフィルタリング
   const filteredHistory = useMemo(() => {
     return historyList.filter((item) => {
+      // 1. 月フィルター
       const itemMonthStr = item.created_at.split('T')[0].substring(0, 7); // YYYY-MM
-      if (selectedMonth) {
-        return itemMonthStr === selectedMonth;
+      if (selectedMonth && itemMonthStr !== selectedMonth) {
+        return false;
       }
+
+      // 2. 店舗名フィルター
+      if (searchStore.trim() !== '') {
+        const storeMatch = item.store_name && item.store_name.toLowerCase().includes(searchStore.trim().toLowerCase());
+        if (!storeMatch) return false;
+      }
+
+      // 3. 材料名フィルター
+      if (searchMaterial.trim() !== '') {
+        const prodInfo = productMap[item.barcode];
+        const productName = prodInfo ? prodInfo.name : item.barcode;
+        const materialMatch = productName.toLowerCase().includes(searchMaterial.trim().toLowerCase());
+        if (!materialMatch) return false;
+      }
+
       return true;
     });
-  }, [historyList, selectedMonth]);
+  }, [historyList, selectedMonth, searchStore, searchMaterial, productMap]);
 
   // 出庫者ごとの合計金額集計（履歴に保存されている total_amount を優先して集計）
   const userSummary = useMemo(() => {
@@ -174,15 +194,40 @@ export default function HistoryPage() {
       </div>
       <hr className="mb-4" />
 
-      {/* 月選択フィルター */}
-      <div className="bg-white p-3 rounded-xl border shadow-sm mb-4">
-        <label className="block text-xs font-bold text-gray-600 mb-1">表示する月を選択</label>
-        <input 
-          type="month" 
-          value={selectedMonth} 
-          onChange={(e) => { setSelectedMonth(e.target.value); setSelectedUserForDetail(null); }}
-          className="w-full p-2 border rounded-lg text-base bg-gray-50 font-bold"
-        />
+      {/* フィルターエリア（月選択 ＆ 店舗・材料名検索） */}
+      <div className="bg-white p-3 rounded-xl border shadow-sm mb-4 space-y-3">
+        <div>
+          <label className="block text-xs font-bold text-gray-600 mb-1">表示する月を選択</label>
+          <input 
+            type="month" 
+            value={selectedMonth} 
+            onChange={(e) => { setSelectedMonth(e.target.value); setSelectedUserForDetail(null); }}
+            className="w-full p-2 border rounded-lg text-base bg-gray-50 font-bold"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="block text-xs font-bold text-gray-600 mb-1">店舗名で絞り込み</label>
+            <input 
+              type="text"
+              placeholder="例: カパス"
+              value={searchStore}
+              onChange={(e) => setSearchStore(e.target.value)}
+              className="w-full p-2 border rounded-lg text-base bg-gray-50 font-bold"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-600 mb-1">材料名で絞り込み</label>
+            <input 
+              type="text"
+              placeholder="例: ダクト"
+              value={searchMaterial}
+              onChange={(e) => setSearchMaterial(e.target.value)}
+              className="w-full p-2 border rounded-lg text-base bg-gray-50 font-bold"
+            />
+          </div>
+        </div>
       </div>
 
       {/* 出庫者ごとの合計金額集計セクション */}
@@ -191,7 +236,7 @@ export default function HistoryPage() {
           👤 出庫者別 合計金額 ({selectedMonth || '全期間'})
         </h2>
         {Object.keys(userSummary).length === 0 ? (
-          <p className="text-xs text-gray-400 py-2">この月の出庫データはありません</p>
+          <p className="text-xs text-gray-400 py-2">この条件に該当する出庫データはありません</p>
         ) : (
           <div className="space-y-2 mt-2">
             {Object.entries(userSummary).map(([user, total]) => (
@@ -247,7 +292,7 @@ export default function HistoryPage() {
       {loading ? (
         <p className="text-center text-gray-500 py-8">読み込み中...</p>
       ) : filteredHistory.length === 0 ? (
-        <p className="text-center text-gray-500 py-8">該当する月の履歴はありません。</p>
+        <p className="text-center text-gray-500 py-8">該当する履歴はありません。</p>
       ) : (
         <div className="space-y-3">
           {filteredHistory.map((item) => {
