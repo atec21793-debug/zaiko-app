@@ -17,9 +17,19 @@ export default function ManagePage() {
 
   // 一括編集モード用のステート
   const [isBatchMode, setIsBatchMode] = useState(false);
-  const [batchKeywords, setBatchKeywords] = useState('頭, ダクト, 90, 45, ジョイント, L頭');
+  const [selectedKeyword, setSelectedKeyword] = useState('頭'); // デフォルトで「頭」を選択
   const [batchFilteredProducts, setBatchFilteredProducts] = useState<any[]>([]);
   const [commonStorePrices, setCommonStorePrices] = useState<{ [key: string]: string }>({});
+
+  // 選択肢の定義
+  const batchCategories = [
+    { label: '頭', keywords: ['頭'] },
+    { label: 'ダクト', keywords: ['ダクト'] },
+    { label: '90', keywords: ['90'] },
+    { label: '45', keywords: ['45'] },
+    { label: 'ジョイント', keywords: ['ジョイント'] },
+    { label: 'L頭', keywords: ['L頭'] },
+  ];
 
   const stores = ['カパス', '松尾', 'ロイヤル', '電材センター', 'プロストック', 'コーナン', '建デポ', 'ビバホーム', 'コメリ'];
 
@@ -32,28 +42,19 @@ export default function ManagePage() {
     fetchProducts();
   }, []);
 
-  // 複数のキーワード（カンマやスペース区切り）いずれかに一致する商品を抽出
+  // 選択されたカテゴリに応じて商品を抽出
   useEffect(() => {
-    if (!batchKeywords.trim()) {
-      setBatchFilteredProducts([]);
-      return;
-    }
-    // カンマまたはスペースでキーワードを分割し、空文字を除外
-    const keywords = batchKeywords
-      .split(/[,、\s]+/)
-      .map(k => k.trim())
-      .filter(Boolean);
-
-    if (keywords.length === 0) {
+    const category = batchCategories.find(c => c.label === selectedKeyword);
+    if (!category) {
       setBatchFilteredProducts([]);
       return;
     }
 
     const filtered = products.filter(p => 
-      keywords.some(keyword => p.name.includes(keyword))
+      category.keywords.some(keyword => p.name.includes(keyword))
     );
     setBatchFilteredProducts(filtered);
-  }, [batchKeywords, products]);
+  }, [selectedKeyword, products]);
 
   // JANコード変更時（またはリスト選択時）に、その商品の各店舗の単価を unit_prices から取得してセットする
   const fetchPricesForBarcode = async (code: string) => {
@@ -122,7 +123,7 @@ export default function ManagePage() {
     alert('登録しました！');
   };
 
-  // 一括編集の保存処理（該当する全アイテムに対して同じ店舗単価などを適用）
+  // 一括編集の保存処理
   const handleBatchSubmit = async () => {
     if (batchFilteredProducts.length === 0) {
       alert('対象の材料が見つかりません。');
@@ -151,7 +152,7 @@ export default function ManagePage() {
       }
     }
 
-    alert(`条件に一致する ${batchFilteredProducts.length} 件の単価を一括更新しました！`);
+    alert(`「${selectedKeyword}」に該当する ${batchFilteredProducts.length} 件の単価を一括更新しました！`);
     setIsBatchMode(false);
   };
 
@@ -161,12 +162,13 @@ export default function ManagePage() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">材料登録・編集</h1>
         <div className="flex gap-2">
+          {/* 他のボタンに合わせたトーンに変更 */}
           <button
             type="button"
             onClick={() => setIsBatchMode(!isBatchMode)}
-            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm font-bold text-sm transition"
+            className="px-3 py-1.5 bg-gray-700 hover:bg-gray-800 text-white rounded-lg shadow-sm font-bold text-sm transition"
           >
-            {isBatchMode ? '通常登録に戻る' : '複数キーワード一括編集'}
+            {isBatchMode ? '通常登録に戻る' : 'カテゴリ一括編集'}
           </button>
           <Link 
             href="/" 
@@ -178,19 +180,23 @@ export default function ManagePage() {
       </div>
       <hr className="mb-4" />
 
-      {/* 一括編集モード */}
+      {/* 一括編集モード（ドロップダウン選択） */}
       {isBatchMode ? (
         <div className="space-y-6 bg-white p-4 rounded-xl shadow border">
-          <h2 className="text-xl font-bold text-gray-800 border-b pb-2">複数キーワード一括編集モード</h2>
+          <h2 className="text-xl font-bold text-gray-800 border-b pb-2">カテゴリ一括編集モード</h2>
           <div>
-            <label className="block text-xs font-bold text-gray-600 mb-1">検索キーワード（カンマやスペース区切りで複数指定可）</label>
-            <input 
-              type="text" 
-              className="w-full p-3 border rounded-lg bg-white text-base font-bold" 
-              value={batchKeywords} 
-              onChange={(e) => setBatchKeywords(e.target.value)} 
-            />
-            <p className="text-xs text-gray-500 mt-1">例: 頭, ダクト, 90, 45, ジョイント, L頭</p>
+            <label className="block text-xs font-bold text-gray-600 mb-1">編集するカテゴリを選択</label>
+            <select 
+              className="w-full p-3 border rounded-lg bg-white text-base font-bold text-gray-700"
+              value={selectedKeyword}
+              onChange={(e) => setSelectedKeyword(e.target.value)}
+            >
+              {batchCategories.map((category) => (
+                <option key={category.label} value={category.label}>
+                  {category.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
@@ -229,12 +235,13 @@ export default function ManagePage() {
             ))}
           </div>
 
+          {/* 他のメインボタンに合わせた背景色に変更 */}
           <button 
             type="button" 
             onClick={handleBatchSubmit}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-xl font-bold text-lg shadow-lg"
+            className="w-full bg-gray-800 text-white p-4 rounded-xl font-bold text-lg shadow-lg"
           >
-            該当する材料 ({batchFilteredProducts.length}件) の単価を一括更新する
+            「{selectedKeyword}」の材料 ({batchFilteredProducts.length}件) の単価を一括更新する
           </button>
         </div>
       ) : (
