@@ -63,7 +63,7 @@ export default function OutboundPage() {
       .select('price')
       .eq('barcode', code)
       .eq('store_name', store)
-      .order('created_at', { ascending: false }) // または updated_at
+      .order('id', { ascending: false }) // データベースのIDが大きい（＝新しく追加された）順
       .limit(1);
 
     if (priceErr) {
