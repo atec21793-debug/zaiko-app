@@ -8,19 +8,15 @@ export default function HistoryPage() {
   const [productMap, setProductMap] = useState<{ [barcode: string]: { name: string } }>({});
   const [loading, setLoading] = useState(true);
 
-  // 今月の年月を YYYY-MM 形式で取得 (日本時間ベース)
-  const todayJST = new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', timeZone: 'Asia/Tokyo' }).replace(/\//g, '-');
-  const [selectedMonth, setSelectedMonth] = useState(todayJST); 
+  // 今月の年月を YYYY-MM 形式で取得
+  const todayStr = new Date().toISOString().substring(0, 7);
+  const [selectedMonth, setSelectedMonth] = useState(todayStr); 
   const [selectedUserForDetail, setSelectedUserForDetail] = useState<string | null>(null);
 
-  // タブ切り替え用のステート ('all' | '出庫' | '入庫')
   const [activeTab, setActiveTab] = useState<'all' | '出庫' | '入庫'>('all');
-
-  // 検索用のステート
   const [searchStore, setSearchStore] = useState('');
   const [searchMaterial, setSearchMaterial] = useState('');
 
-  // 価格編集用のステート
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editUnitPrice, setEditUnitPrice] = useState<number>(0);
 
@@ -28,7 +24,7 @@ export default function HistoryPage() {
   const fetchData = async () => {
     setLoading(true);
     
-    // 1. 製品マスタ（products）から材料名を取得するマップを作成
+    // 1. 製品マスタ取得
     const { data: prodData } = await supabase.from('products').select('*');
     const map: { [barcode: string]: { name: string } } = {};
     if (prodData) {
@@ -38,11 +34,12 @@ export default function HistoryPage() {
     }
     setProductMap(map);
 
-    // 2. 履歴（history）を取得（シンプルに最新順で取得）
+    // 2. 履歴取得（上限100件を超えるため、limitを広げて安全に取得）
     const { data: histData, error } = await supabase
       .from('history')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(500);
 
     if (error) {
       console.error('Error fetching history:', error);
@@ -52,7 +49,10 @@ export default function HistoryPage() {
     setLoading(false);
   };
 
-  // 履歴の削除（取り消し処理 & 在庫・集計の自動補正）
+  useEffect(() => {
+    fetchData();
+  }, []);
+
   const handleDelete = async (item: any) => {
     const prodInfo = productMap[item.barcode];
     const itemName = prodInfo ? prodInfo.name : item.barcode;
@@ -86,7 +86,6 @@ export default function HistoryPage() {
     fetchData();
   };
 
-  // 価格修正の保存処理
   const handleSavePrice = async (item: any) => {
     const newUnitPrice = Number(editUnitPrice);
     if (isNaN(newUnitPrice) || newUnitPrice < 0) {
@@ -95,7 +94,6 @@ export default function HistoryPage() {
     }
 
     const newTotalAmount = newUnitPrice * item.quantity;
-
     const { error } = await supabase
       .from('history')
       .update({
@@ -113,55 +111,38 @@ export default function HistoryPage() {
     }
   };
 
-  // ★ 確実に日本時間の年月（YYYY-MM）を算出するヘルパー関数
+  // ★ 超高速で確実にYYYY-MMを取り出す関数（タイムゾーンのズレをここで安全に吸収）
   const getItemMonthStr = (createdAt: string) => {
     if (!createdAt) return '';
     try {
+      // データベースの日時文字列（例: 2026-07-30T15:00:00+00）に +9時間（日本時間）を足した日付オブジェクトを作る
       const date = new Date(createdAt);
       if (isNaN(date.getTime())) return createdAt.substring(0, 7);
-      
-      // 日本時間（Asia/Tokyo）の各パーツを数値で安全に取得
-      const formatter = new Intl.DateTimeFormat('ja-JP', {
-        timeZone: 'Asia/Tokyo',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
-      });
-      const parts = formatter.formatToParts(date);
-      const year = parts.find(p => p.type === 'year')?.value;
-      const month = parts.find(p => p.type === 'month')?.value;
-      
-      if (year && month) {
-        return `${year}-${month}`;
-      }
-      return createdAt.substring(0, 7);
+
+      // 日本時間のYYYY-MMを強制的に作成
+      const jstDate = new Date(date.getTime() + (9 * 60 * 60 * 1000));
+      return jstDate.toISOString().substring(0, 7);
     } catch (e) {
       return createdAt.substring(0, 7);
     }
   };
 
-  // 選択された「月」「タブ」および「店舗・材料名」でフィルタリング
   const filteredHistory = useMemo(() => {
     return historyList.filter((item) => {
-      // 0. タブフィルター (すべて / 出庫 / 入庫)
       if (activeTab !== 'all' && item.type !== activeTab) {
         return false;
       }
 
-      // 1. 月フィルター（日本時間のYYYY-MMで比較）
       const itemMonthStr = getItemMonthStr(item.created_at);
-      
       if (selectedMonth && itemMonthStr !== selectedMonth) {
         return false;
       }
 
-      // 2. 店舗名フィルター
       if (searchStore.trim() !== '') {
         const storeMatch = item.store_name && item.store_name.toLowerCase().includes(searchStore.trim().toLowerCase());
         if (!storeMatch) return false;
       }
 
-      // 3. 材料名フィルター
       if (searchMaterial.trim() !== '') {
         const prodInfo = productMap[item.barcode];
         const productName = prodInfo ? prodInfo.name : item.barcode;
@@ -173,7 +154,6 @@ export default function HistoryPage() {
     });
   }, [historyList, activeTab, selectedMonth, searchStore, searchMaterial, productMap]);
 
-  // 出庫者ごとの合計金額集計（選択月に連動）
   const userSummary = useMemo(() => {
     const summary: { [key: string]: number } = {};
     historyList
@@ -192,7 +172,6 @@ export default function HistoryPage() {
     return summary;
   }, [historyList, selectedMonth]);
 
-  // タップされた出庫者が使った材料を全店舗合算で集計（選択月に連動）
   const selectedUserMaterials = useMemo(() => {
     if (!selectedUserForDetail) return [];
     const materialMap: { [name: string]: { name: string; quantity: number; totalAmount: number } } = {};
@@ -222,7 +201,6 @@ export default function HistoryPage() {
 
   return (
     <main className="w-full max-w-full p-4 bg-gray-50 min-h-screen">
-      {/* ヘッダー */}
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">月別履歴・集計</h1>
         <Link 
@@ -234,7 +212,6 @@ export default function HistoryPage() {
       </div>
       <hr className="mb-4" />
 
-      {/* フィルターエリア（月選択 ＆ 店舗・材料名検索） */}
       <div className="bg-white p-3 rounded-xl border shadow-sm mb-4 space-y-3">
         <div>
           <label className="block text-xs font-bold text-gray-600 mb-1">表示する月を選択</label>
@@ -270,7 +247,6 @@ export default function HistoryPage() {
         </div>
       </div>
 
-      {/* 出庫者ごとの合計金額集計セクション */}
       <div className="bg-gray-800 text-white p-4 rounded-xl shadow-md mb-6">
         <h2 className="text-sm font-bold mb-2 border-b border-gray-700 pb-1">
           👤 出庫者別 合計金額 ({selectedMonth || '全期間'})
@@ -297,7 +273,6 @@ export default function HistoryPage() {
         )}
       </div>
 
-      {/* 選択された出庫者の合算材料詳細エリア */}
       {selectedUserForDetail && (
         <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl mb-6 shadow-sm">
           <div className="flex justify-between items-center mb-2">
@@ -327,7 +302,6 @@ export default function HistoryPage() {
         </div>
       )}
 
-      {/* タブ切り替えボタン */}
       <div className="flex rounded-xl bg-gray-200 p-1 mb-4 font-bold text-sm">
         <button
           type="button"
@@ -358,7 +332,6 @@ export default function HistoryPage() {
         </button>
       </div>
 
-      {/* 履歴一覧 */}
       <h2 className="font-bold text-base mb-3">入出庫履歴 ({filteredHistory.length}件)</h2>
       {loading ? (
         <p className="text-center text-gray-500 py-8">読み込み中...</p>
@@ -409,7 +382,6 @@ export default function HistoryPage() {
                   <span>担当: {item.user_name || '-'}</span>
                 </div>
 
-                {/* 出庫の場合のみ金額表示と「価格修正」ボタンを設置 */}
                 {item.type === '出庫' && (
                   <div className="mt-2 pt-2 border-t border-gray-100">
                     {!isEditing ? (
