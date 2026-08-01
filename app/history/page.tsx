@@ -126,10 +126,12 @@ export default function HistoryPage() {
       }
 
       // 1. 月フィルター
-      const itemMonthStr = item.created_at.split('T')[0].substring(0, 7); // YYYY-MM
-      if (selectedMonth && itemMonthStr !== selectedMonth) {
-        return false;
-      }
+      const itemDate = new Date(item.created_at);
+const itemMonthStr = itemDate.toLocaleDateString('ja-JP', {
+  year: 'numeric',
+  month: '2-digit',
+  timeZone: 'Asia/Tokyo'
+}).replace(/\//g, '-'); // "2026/07" -> "2026-07"
 
       // 2. 店舗名フィルター
       if (searchStore.trim() !== '') {
