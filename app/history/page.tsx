@@ -25,6 +25,7 @@ export default function HistoryPage() {
   const [editUnitPrice, setEditUnitPrice] = useState<number>(0);
 
   // 履歴データと製品マスタを取得
+  // 履歴データと製品マスタを取得
   const fetchData = async () => {
     setLoading(true);
     
@@ -38,11 +39,12 @@ export default function HistoryPage() {
     }
     setProductMap(map);
 
-    // 2. 履歴（history）を取得
+    // 2. 履歴（history）を取得（上限を増やして全件取得する）
     const { data: histData, error } = await supabase
       .from('history')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .range(0, 999); // 最大1000件まで取得するように指定
 
     if (error) {
       console.error('Error fetching history:', error);
@@ -51,10 +53,6 @@ export default function HistoryPage() {
     }
     setLoading(false);
   };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
 
   // 履歴の削除（取り消し処理 & 在庫・集計の自動補正）
   const handleDelete = async (item: any) => {
