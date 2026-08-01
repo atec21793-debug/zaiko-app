@@ -5,8 +5,9 @@ export default function Home() {
     { name: '入庫', href: '/inbound', color: 'bg-gray-800' },
     { name: '出庫', href: '/outbound', color: 'bg-gray-800' },
     { name: '材料管理', href: '/manage', color: 'bg-gray-800' },
-    { name: '履歴・集計', href: '/history', color: 'bg-gray-800' },
+    { name: '履歴', href: '/history', color: 'bg-gray-800' },
     { name: '在庫一覧', href: '/inventory', color: 'bg-gray-800' },
+    { name: '集計', href: '/summary', color: 'bg-blue-600' }, // ★追加
   ];
 
   return (
@@ -29,9 +30,13 @@ export default function Home() {
         ))}
       </div>
 
-      <div className="w-full">
+      {/* 在庫一覧 と 入出庫まとめ を横並びにする */}
+      <div className="grid grid-cols-2 gap-4">
         <Link href={menuItems[4].href} className={`${menuItems[4].color} text-white h-24 flex items-center justify-center rounded-xl text-lg font-bold shadow-lg`}>
           {menuItems[4].name}
+        </Link>
+        <Link href={menuItems[5].href} className={`${menuItems[5].color} text-white h-24 flex items-center justify-center rounded-xl text-lg font-bold shadow-lg`}>
+          {menuItems[5].name}
         </Link>
       </div>
     </main>
