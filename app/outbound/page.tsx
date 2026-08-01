@@ -17,6 +17,11 @@ export default function OutboundPage() {
   const [storeName, setStoreName] = useState('カパス');
   const [quantity, setQuantity] = useState<number | ''>(''); 
   const [unitPrice, setUnitPrice] = useState<number>(0);
+  
+  // 今日の日付を YYYY-MM-DD 形式で取得（日本時間ベース）
+  const todayJSTStr = new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Tokyo' }).replace(/\//g, '-');
+  const [outboundDate, setOutboundDate] = useState(todayJSTStr);
+
   const [isScanning, setIsScanning] = useState(false);
   const scannedRef = useRef(false);
 
@@ -153,6 +158,9 @@ export default function OutboundPage() {
     const currentUnitPrice = Number(unitPrice) || 0;
     const totalAmount = qtyNum * currentUnitPrice;
 
+    // 選択された日付に現在の時刻（時分秒）を付与してISO文字列化する
+    const customCreatedAt = new Date(`${outboundDate}T00:00:00+09:00`).toISOString();
+
     const { data: inv } = await supabase
       .from('inventory')
       .select('*')
@@ -171,6 +179,7 @@ export default function OutboundPage() {
       quantity: qtyNum,
       unit_price: currentUnitPrice,
       total_amount: totalAmount,
+      created_at: customCreatedAt, // 選択された日付を反映
     });
 
     if (histErr) {
@@ -191,7 +200,7 @@ export default function OutboundPage() {
       });
     }
 
-    alert(`出庫完了しました (${productName} -${qtyNum})\n単価: ¥${currentUnitPrice.toLocaleString()} / 合計: ¥${totalAmount.toLocaleString()}\n現在の在庫: ${newQty}`);
+    alert(`出庫完了しました (${productName} -${qtyNum})\n日付: ${outboundDate}\n単価: ¥{currentUnitPrice.toLocaleString()} / 合計: ¥{totalAmount.toLocaleString()}\n現在の在庫: ${newQty}`);
     setBarcode('');
     setProductName('');
     setQuantity('');
@@ -245,6 +254,18 @@ export default function OutboundPage() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* 出庫日選択 */}
+        <div>
+          <label className="block text-xs font-bold text-gray-600 mb-1">出庫日</label>
+          <input
+            type="date"
+            value={outboundDate}
+            onChange={(e) => setOutboundDate(e.target.value)}
+            required
+            className="w-full p-3 border rounded-lg text-base bg-white font-bold"
+          />
+        </div>
+
         <div>
           <label className="block text-xs font-bold text-gray-600 mb-1">対象店舗</label>
           <select
