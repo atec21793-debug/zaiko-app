@@ -15,6 +15,11 @@ export default function InboundPage() {
   const [productName, setProductName] = useState('');
   const [storeName, setStoreName] = useState('カパス');
   const [quantity, setQuantity] = useState<number | ''>(''); // 初期値を空欄に変更
+
+  // 今日の日付を YYYY-MM-DD 形式で取得
+  const todayStr = new Date().toISOString().substring(0, 10);
+  const [inboundDate, setInboundDate] = useState(todayStr); // 入庫日用のステート
+
   const [isScanning, setIsScanning] = useState(false);
   const scannedRef = useRef(false);
 
@@ -114,7 +119,13 @@ export default function InboundPage() {
       return;
     }
 
-    // 1. 履歴追加
+    // 選択された日付に現在の時間を付与して保存 (YYYY-MM-DDTHH:mm:ss形式など)
+    // 既存データの時間に合わせるため、現在の時刻を維持して日付だけを差し替えるか、指定日の現在時刻にする
+    const now = new Date();
+    const targetDate = new Date(inboundDate);
+    targetDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
+
+    // 1. 履歴追加（指定された日付を created_at として保存）
     const { error: histErr } = await supabase.from('history').insert({
       barcode,
       store_name: storeName,
@@ -123,6 +134,7 @@ export default function InboundPage() {
       quantity: qtyNum,
       unit_price: 0,
       total_amount: 0,
+      created_at: targetDate.toISOString(),
     });
 
     if (histErr) {
@@ -155,6 +167,7 @@ export default function InboundPage() {
     setBarcode('');
     setProductName('');
     setQuantity('');
+    setInboundDate(new Date().toISOString().substring(0, 10)); // 日付を今日にリセット
   };
 
   return (
@@ -188,6 +201,17 @@ export default function InboundPage() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-xs font-bold text-gray-600 mb-1">入庫日</label>
+          <input
+            type="date"
+            value={inboundDate}
+            onChange={(e) => setInboundDate(e.target.value)}
+            required
+            className="w-full p-3 border rounded-lg text-base bg-white font-bold"
+          />
+        </div>
+
         <div>
           <label className="block text-xs font-bold text-gray-600 mb-1">対象店舗</label>
           <select
