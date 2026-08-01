@@ -8,19 +8,19 @@ export default function HistoryPage() {
   const [productMap, setProductMap] = useState<{ [barcode: string]: { name: string } }>({});
   const [loading, setLoading] = useState(true);
 
-  // 月ごとの集計用ステート (デフォルトは今月: YYYY-MM)
-  const currentMonthStr = new Date().toISOString().substring(0, 7);
-  const [selectedMonth, setSelectedMonth] = useState(currentMonthStr); 
+  // 今月の年月を YYYY-MM 形式で取得 (日本時間ベース)
+  const todayJST = new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', timeZone: 'Asia/Tokyo' }).replace(/\//g, '-');
+  const [selectedMonth, setSelectedMonth] = useState(todayJST); 
   const [selectedUserForDetail, setSelectedUserForDetail] = useState<string | null>(null);
 
   // タブ切り替え用のステート ('all' | '出庫' | '入庫')
   const [activeTab, setActiveTab] = useState<'all' | '出庫' | '入庫'>('all');
 
-  // 検索用のステート追加
+  // 検索用のステート
   const [searchStore, setSearchStore] = useState('');
   const [searchMaterial, setSearchMaterial] = useState('');
 
-  // 価格編集中・または編集中の履歴IDを保持するステート
+  // 価格編集用のステート
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editUnitPrice, setEditUnitPrice] = useState<number>(0);
 
@@ -113,11 +113,20 @@ export default function HistoryPage() {
     } else {
       alert('出庫価格を修正しました！');
       setEditingId(null);
-      fetchData(); // データを再取得して表示を更新
+      fetchData();
     }
   };
 
-  // 選択された「月」「タブ（すべて/出庫/入庫）」および「店舗・材料名」でフィルタリング
+  // 日付文字列から日本時間の "YYYY-MM" を正確に取得するヘルパー関数
+  const getItemMonthStr = (createdAt: string) => {
+    return new Date(createdAt).toLocaleDateString('ja-JP', {
+      year: 'numeric',
+      month: '2-digit',
+      timeZone: 'Asia/Tokyo'
+    }).replace(/\//g, '-');
+  };
+
+  // 選択された「月」「タブ」および「店舗・材料名」でフィルタリング
   const filteredHistory = useMemo(() => {
     return historyList.filter((item) => {
       // 0. タブフィルター (すべて / 出庫 / 入庫)
@@ -125,13 +134,11 @@ export default function HistoryPage() {
         return false;
       }
 
-      // 1. 月フィルター
-      const itemDate = new Date(item.created_at);
-const itemMonthStr = itemDate.toLocaleDateString('ja-JP', {
-  year: 'numeric',
-  month: '2-digit',
-  timeZone: 'Asia/Tokyo'
-}).replace(/\//g, '-'); // "2026/07" -> "2026-07"
+      // 1. 月フィルター（日本時間のYYYY-MMで比較）
+      const itemMonthStr = getItemMonthStr(item.created_at);
+      if (selectedMonth && itemMonthStr !== selectedMonth) {
+        return false;
+      }
 
       // 2. 店舗名フィルター
       if (searchStore.trim() !== '') {
@@ -151,12 +158,12 @@ const itemMonthStr = itemDate.toLocaleDateString('ja-JP', {
     });
   }, [historyList, activeTab, selectedMonth, searchStore, searchMaterial, productMap]);
 
-  // 出庫者ごとの合計金額集計（履歴に保存されている total_amount を優先して集計）
+  // 出庫者ごとの合計金額集計（選択月に連動）
   const userSummary = useMemo(() => {
     const summary: { [key: string]: number } = {};
     historyList
       .filter((item) => {
-        const itemMonthStr = item.created_at.split('T')[0].substring(0, 7);
+        const itemMonthStr = getItemMonthStr(item.created_at);
         const matchMonth = !selectedMonth || itemMonthStr === selectedMonth;
         return matchMonth && item.type === '出庫' && item.user_name && item.user_name !== '-';
       })
@@ -170,14 +177,14 @@ const itemMonthStr = itemDate.toLocaleDateString('ja-JP', {
     return summary;
   }, [historyList, selectedMonth]);
 
-  // タップされた出庫者が使った材料を全店舗合算で集計
+  // タップされた出庫者が使った材料を全店舗合算で集計（選択月に連動）
   const selectedUserMaterials = useMemo(() => {
     if (!selectedUserForDetail) return [];
     const materialMap: { [name: string]: { name: string; quantity: number; totalAmount: number } } = {};
 
     historyList
       .filter((item) => {
-        const itemMonthStr = item.created_at.split('T')[0].substring(0, 7);
+        const itemMonthStr = getItemMonthStr(item.created_at);
         const matchMonth = !selectedMonth || itemMonthStr === selectedMonth;
         return matchMonth && item.type === '出庫' && item.user_name === selectedUserForDetail;
       })
