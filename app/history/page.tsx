@@ -117,19 +117,28 @@ export default function HistoryPage() {
     }
   };
 
-  // データベースのUTC日時を日本時間に確実に変換して "YYYY-MM" を取得するヘルパー関数
+  // ★ 確実に日本時間の年月（YYYY-MM）を算出するヘルパー関数
   const getItemMonthStr = (createdAt: string) => {
     if (!createdAt) return '';
     try {
       const date = new Date(createdAt);
-      if (isNaN(date.getTime())) {
-        return createdAt.substring(0, 7);
-      }
-      return date.toLocaleDateString('ja-JP', {
+      if (isNaN(date.getTime())) return createdAt.substring(0, 7);
+      
+      // 日本時間（Asia/Tokyo）の各パーツを数値で安全に取得
+      const formatter = new Intl.DateTimeFormat('ja-JP', {
+        timeZone: 'Asia/Tokyo',
         year: 'numeric',
         month: '2-digit',
-        timeZone: 'Asia/Tokyo',
-      }).replace(/\//g, '-');
+        day: '2-digit'
+      });
+      const parts = formatter.formatToParts(date);
+      const year = parts.find(p => p.type === 'year')?.value;
+      const month = parts.find(p => p.type === 'month')?.value;
+      
+      if (year && month) {
+        return `${year}-${month}`;
+      }
+      return createdAt.substring(0, 7);
     } catch (e) {
       return createdAt.substring(0, 7);
     }
@@ -146,15 +155,6 @@ export default function HistoryPage() {
       // 1. 月フィルター（日本時間のYYYY-MMで比較）
       const itemMonthStr = getItemMonthStr(item.created_at);
       
-      // ★ここにコンソールログを追加しました
-      console.log('【月フィルター判定】', {
-        id: item.id,
-        created_at: item.created_at,
-        変換された月: itemMonthStr,
-        選択中の月: selectedMonth,
-        一致するか: itemMonthStr === selectedMonth
-      });
-
       if (selectedMonth && itemMonthStr !== selectedMonth) {
         return false;
       }
