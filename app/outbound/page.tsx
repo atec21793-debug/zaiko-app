@@ -160,7 +160,7 @@ export default function OutboundPage() {
 
     // 選択された日付に現在の時間を付与して保存
     const now = new Date();
-    const targetDate = new Date(outboundDate);
+    const targetDate = new Date(outboundDate + 'T12:00:00+09:00');
     targetDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
 
     const { data: inv } = await supabase
