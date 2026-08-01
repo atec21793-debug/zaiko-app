@@ -118,12 +118,10 @@ export default function HistoryPage() {
   };
 
   // 日付文字列から日本時間の "YYYY-MM" を正確に取得するヘルパー関数
-  const getItemMonthStr = (createdAt: string) => {
-    return new Date(createdAt).toLocaleDateString('ja-JP', {
-      year: 'numeric',
-      month: '2-digit',
-      timeZone: 'Asia/Tokyo'
-    }).replace(/\//g, '-');
+ const getItemMonthStr = (createdAt: string) => {
+    if (!createdAt) return '';
+    // タイムゾーンのズレを防ぐため、文字列の先頭10文字（YYYY-MM-DD）のさらに先頭7文字を取り出す
+    return createdAt.substring(0, 7); 
   };
 
   // 選択された「月」「タブ」および「店舗・材料名」でフィルタリング

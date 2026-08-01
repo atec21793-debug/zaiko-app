@@ -17,11 +17,6 @@ export default function OutboundPage() {
   const [storeName, setStoreName] = useState('カパス');
   const [quantity, setQuantity] = useState<number | ''>(''); 
   const [unitPrice, setUnitPrice] = useState<number>(0);
-
-  // 今日の日付を YYYY-MM-DD 形式で取得
-  const todayStr = new Date().toISOString().substring(0, 10);
-  const [outboundDate, setOutboundDate] = useState(todayStr); // 出庫日用のステート
-
   const [isScanning, setIsScanning] = useState(false);
   const scannedRef = useRef(false);
 
@@ -158,11 +153,6 @@ export default function OutboundPage() {
     const currentUnitPrice = Number(unitPrice) || 0;
     const totalAmount = qtyNum * currentUnitPrice;
 
-    // 選択された日付に現在の時間を付与して保存
-    const now = new Date();
-    const targetDate = new Date(outboundDate + 'T12:00:00+09:00');
-    targetDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
-
     const { data: inv } = await supabase
       .from('inventory')
       .select('*')
@@ -181,7 +171,6 @@ export default function OutboundPage() {
       quantity: qtyNum,
       unit_price: currentUnitPrice,
       total_amount: totalAmount,
-      created_at: targetDate.toISOString(), // 選択された日付を反映
     });
 
     if (histErr) {
@@ -207,7 +196,6 @@ export default function OutboundPage() {
     setProductName('');
     setQuantity('');
     setUnitPrice(0);
-    setOutboundDate(new Date().toISOString().substring(0, 10)); // 日付を今日にリセット
   };
 
   return (
@@ -257,17 +245,6 @@ export default function OutboundPage() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-xs font-bold text-gray-600 mb-1">出庫日</label>
-          <input
-            type="date"
-            value={outboundDate}
-            onChange={(e) => setOutboundDate(e.target.value)}
-            required
-            className="w-full p-3 border rounded-lg text-base bg-white font-bold"
-          />
-        </div>
-
         <div>
           <label className="block text-xs font-bold text-gray-600 mb-1">対象店舗</label>
           <select
