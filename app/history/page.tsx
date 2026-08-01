@@ -13,6 +13,9 @@ export default function HistoryPage() {
   const [selectedMonth, setSelectedMonth] = useState(currentMonthStr); 
   const [selectedUserForDetail, setSelectedUserForDetail] = useState<string | null>(null);
 
+  // タブ切り替え用のステート ('all' | '出庫' | '入庫')
+  const [activeTab, setActiveTab] = useState<'all' | '出庫' | '入庫'>('all');
+
   // 検索用のステート追加
   const [searchStore, setSearchStore] = useState('');
   const [searchMaterial, setSearchMaterial] = useState('');
@@ -114,9 +117,14 @@ export default function HistoryPage() {
     }
   };
 
-  // 選択された「月」および「店舗・材料名」でフィルタリング
+  // 選択された「月」「タブ（すべて/出庫/入庫）」および「店舗・材料名」でフィルタリング
   const filteredHistory = useMemo(() => {
     return historyList.filter((item) => {
+      // 0. タブフィルター (すべて / 出庫 / 入庫)
+      if (activeTab !== 'all' && item.type !== activeTab) {
+        return false;
+      }
+
       // 1. 月フィルター
       const itemMonthStr = item.created_at.split('T')[0].substring(0, 7); // YYYY-MM
       if (selectedMonth && itemMonthStr !== selectedMonth) {
@@ -139,13 +147,17 @@ export default function HistoryPage() {
 
       return true;
     });
-  }, [historyList, selectedMonth, searchStore, searchMaterial, productMap]);
+  }, [historyList, activeTab, selectedMonth, searchStore, searchMaterial, productMap]);
 
   // 出庫者ごとの合計金額集計（履歴に保存されている total_amount を優先して集計）
   const userSummary = useMemo(() => {
     const summary: { [key: string]: number } = {};
-    filteredHistory
-      .filter((item) => item.type === '出庫' && item.user_name && item.user_name !== '-')
+    historyList
+      .filter((item) => {
+        const itemMonthStr = item.created_at.split('T')[0].substring(0, 7);
+        const matchMonth = !selectedMonth || itemMonthStr === selectedMonth;
+        return matchMonth && item.type === '出庫' && item.user_name && item.user_name !== '-';
+      })
       .forEach((item) => {
         const amount = item.total_amount !== undefined && item.total_amount !== null 
           ? Number(item.total_amount) 
@@ -154,15 +166,19 @@ export default function HistoryPage() {
         summary[item.user_name] = (summary[item.user_name] || 0) + amount;
       });
     return summary;
-  }, [filteredHistory]);
+  }, [historyList, selectedMonth]);
 
   // タップされた出庫者が使った材料を全店舗合算で集計
   const selectedUserMaterials = useMemo(() => {
     if (!selectedUserForDetail) return [];
     const materialMap: { [name: string]: { name: string; quantity: number; totalAmount: number } } = {};
 
-    filteredHistory
-      .filter((item) => item.type === '出庫' && item.user_name === selectedUserForDetail)
+    historyList
+      .filter((item) => {
+        const itemMonthStr = item.created_at.split('T')[0].substring(0, 7);
+        const matchMonth = !selectedMonth || itemMonthStr === selectedMonth;
+        return matchMonth && item.type === '出庫' && item.user_name === selectedUserForDetail;
+      })
       .forEach((item) => {
         const prodInfo = productMap[item.barcode];
         const name = prodInfo ? prodInfo.name : `(未登録: ${item.barcode})`;
@@ -178,7 +194,7 @@ export default function HistoryPage() {
       });
 
     return Object.values(materialMap);
-  }, [filteredHistory, selectedUserForDetail, productMap]);
+  }, [historyList, selectedMonth, selectedUserForDetail, productMap]);
 
   return (
     <main className="w-full max-w-full p-4 bg-gray-50 min-h-screen">
@@ -286,6 +302,37 @@ export default function HistoryPage() {
           )}
         </div>
       )}
+
+      {/* タブ切り替えボタン */}
+      <div className="flex rounded-xl bg-gray-200 p-1 mb-4 font-bold text-sm">
+        <button
+          type="button"
+          onClick={() => setActiveTab('all')}
+          className={`flex-1 py-2 rounded-lg transition ${
+            activeTab === 'all' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          すべて
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('出庫')}
+          className={`flex-1 py-2 rounded-lg transition ${
+            activeTab === '出庫' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          出庫のみ
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('入庫')}
+          className={`flex-1 py-2 rounded-lg transition ${
+            activeTab === '入庫' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          入庫のみ
+        </button>
+      </div>
 
       {/* 履歴一覧 */}
       <h2 className="font-bold text-base mb-3">入出庫履歴 ({filteredHistory.length}件)</h2>
