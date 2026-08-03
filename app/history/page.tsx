@@ -227,7 +227,7 @@ export default function HistoryPage() {
   return (
     <main className="w-full max-w-full p-4 bg-gray-50 min-h-screen">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">月別履歴・集計</h1>
+        <h1 className="text-2xl font-bold">月別履歴</h1>
         <Link 
           href="/" 
           className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg shadow-sm font-bold text-sm transition"

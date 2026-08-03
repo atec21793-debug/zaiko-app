@@ -7,7 +7,7 @@ export default function Home() {
     { name: '材料管理', href: '/manage', color: 'bg-gray-800' },
     { name: '履歴', href: '/history', color: 'bg-gray-800' },
     { name: '在庫一覧', href: '/inventory', color: 'bg-gray-800' },
-    { name: '集計', href: '/summary', color: 'bg-blue-600' }, // ★追加
+    { name: '集計', href: '/summary', color: 'bg-gray-800' }, 
   ];
 
   return (
