@@ -34,7 +34,7 @@ export default function HistoryPage() {
       setLoading(true);
     }
     
-    // 1. 製品マスタ取得（unit_priceも一緒に取得して単価の初期値候補にする）
+    // 1. 製品マスタ取得
     const { data: prodData } = await supabase.from('products').select('*');
     const map: { [barcode: string]: { name: string; unit_price?: number } } = {};
     if (prodData) {
@@ -109,12 +109,12 @@ export default function HistoryPage() {
     fetchData(true);
   };
 
-  // 店舗を変更したときに、その店舗におけるその商品の単価を自動で取得してセットする関数
-  const handleStoreChangeForEdit = async (barcode: string, newStore: string) => {
+  // 店舗を変更したときの単価自動取得
+  const handleStoreChangeForEdit = async (barcode: string, newStore: string, currentUnitPrice: number) => {
     setEditStoreName(newStore);
     if (!barcode || !newStore) return;
 
-    // 1. まず inventory テーブルから該当店舗・該当商品の単価があればそれを取得する
+    // 1. まず inventory テーブルから該当店舗・商品の単価を探す
     const { data: invData } = await supabase
       .from('inventory')
       .select('unit_price')
@@ -127,7 +127,7 @@ export default function HistoryPage() {
       return;
     }
 
-    // 2. inventory に単価がなければ、直近の history から同じ店舗・商品の出庫単価を探す
+    // 2. 過去の履歴（history）から同じ店舗・商品の出庫単価を探す
     const { data: histData } = await supabase
       .from('history')
       .select('unit_price')
@@ -143,11 +143,15 @@ export default function HistoryPage() {
       return;
     }
 
-    // 3. それも見つからなければ、製品マスタ（products）の基本単価があればそれを設定する
+    // 3. 製品マスタ（products）の基本単価を探す
     const prodInfo = productMap[barcode];
     if (prodInfo && prodInfo.unit_price !== undefined && prodInfo.unit_price !== null) {
       setEditUnitPrice(Number(prodInfo.unit_price));
+      return;
     }
+
+    // 4. それも見つからない場合は、変更前の単価をそのまま維持する
+    setEditUnitPrice(currentUnitPrice);
   };
 
   const handleSaveEdit = async (item: any) => {
@@ -402,7 +406,7 @@ export default function HistoryPage() {
                         <label className="block text-[10px] font-bold text-gray-600 mb-0.5">店舗名</label>
                         <select
                           value={editStoreName}
-                          onChange={(e) => handleStoreChangeForEdit(item.barcode, e.target.value)}
+                          onChange={(e) => handleStoreChangeForEdit(item.barcode, e.target.value, unitPrice)}
                           className="w-full p-1.5 border rounded text-xs bg-white font-bold"
                         >
                           <option value="">店舗を選択</option>
