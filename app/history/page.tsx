@@ -34,7 +34,7 @@ export default function HistoryPage() {
       setLoading(true);
     }
     
-    // 1. 製品マスタ取得（unit_priceも取得）
+    // 1. 製品マスタ取得
     const { data: prodData } = await supabase.from('products').select('*');
     const map: { [barcode: string]: { name: string; unit_price?: number } } = {};
     if (prodData) {
@@ -44,12 +44,16 @@ export default function HistoryPage() {
     }
     setProductMap(map);
 
-    // 2. 店舗一覧取得
+    // 2. 店舗一覧取得（inventory や unit_prices から店舗一覧を作成）
     const { data: invData } = await supabase.from('inventory').select('store_name');
-    if (invData) {
-      const stores = Array.from(new Set(invData.map((item) => item.store_name).filter(Boolean)));
-      setStoreList(stores);
-    }
+    const { data: priceData } = await supabase.from('unit_prices').select('store_name');
+    
+    const allStores = [
+      ...(invData ? invData.map((item) => item.store_name) : []),
+      ...(priceData ? priceData.map((item) => item.store_name) : [])
+    ];
+    const stores = Array.from(new Set(allStores.filter(Boolean)));
+    setStoreList(stores);
 
     // 3. 履歴取得
     const { data: histData, error } = await supabase
@@ -109,41 +113,28 @@ export default function HistoryPage() {
     fetchData(true);
   };
 
-  // 店舗を変更したときの単価自動取得
+  // 店舗を変更したときに unit_prices テーブルから該当店舗・商品の単価を取得
   const handleStoreChangeForEdit = async (barcode: string, newStore: string) => {
     setEditStoreName(newStore);
     if (!barcode || !newStore) return;
 
-    // 1. まず製品マスタの標準単価をベース候補として取得
-    const prodInfo = productMap[barcode];
-    let resolvedPrice = (prodInfo && prodInfo.unit_price !== undefined && prodInfo.unit_price !== null) 
-      ? Number(prodInfo.unit_price) 
-      : 0;
+    let resolvedPrice = 0;
 
-    // 2. inventory テーブルに該当店舗・商品の単価があればそれを優先する
-    const { data: invData } = await supabase
-      .from('inventory')
-      .select('unit_price')
+    // unit_prices テーブルから指定バーコード＆指定店舗の単価を取得
+    const { data: priceData } = await supabase
+      .from('unit_prices')
+      .select('price')
       .eq('barcode', barcode)
       .eq('store_name', newStore)
       .maybeSingle();
 
-    if (invData && invData.unit_price !== null && invData.unit_price !== undefined) {
-      resolvedPrice = Number(invData.unit_price);
+    if (priceData && priceData.price !== null && priceData.price !== undefined) {
+      resolvedPrice = Number(priceData.price);
     } else {
-      // 3. inventory になければ、過去の history から同じ店舗・商品の出庫単価を探す
-      const { data: histData } = await supabase
-        .from('history')
-        .select('unit_price')
-        .eq('barcode', barcode)
-        .eq('store_name', newStore)
-        .eq('type', '出庫')
-        .not('unit_price', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      if (histData && histData.length > 0 && histData[0].unit_price !== null) {
-        resolvedPrice = Number(histData[0].unit_price);
+      // 見つからない場合は製品マスタの標準単価を確認（なければ0）
+      const prodInfo = productMap[barcode];
+      if (prodInfo && prodInfo.unit_price !== undefined && prodInfo.unit_price !== null) {
+        resolvedPrice = Number(prodInfo.unit_price);
       }
     }
 
@@ -262,7 +253,7 @@ export default function HistoryPage() {
             <label className="block text-xs font-bold text-gray-600 mb-1">店舗名で絞り込み</label>
             <input 
               type="text"
-              placeholder="例: カパス"
+              placeholder="例: 松尾"
               value={searchStore}
               onChange={(e) => setSearchStore(e.target.value)}
               className="w-full p-2 border rounded-lg text-base bg-gray-50 font-bold"
@@ -272,7 +263,7 @@ export default function HistoryPage() {
             <label className="block text-xs font-bold text-gray-600 mb-1">材料名で絞り込み</label>
             <input 
               type="text"
-              placeholder="例: ダクト"
+              placeholder="例: 配管"
               value={searchMaterial}
               onChange={(e) => setSearchMaterial(e.target.value)}
               className="w-full p-2 border rounded-lg text-base bg-gray-50 font-bold"
