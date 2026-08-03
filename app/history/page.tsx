@@ -150,7 +150,7 @@ export default function HistoryPage() {
       return;
     }
 
-    // 4. それも見つからない場合は、変更前の単価をそのまま維持する
+    // 4. それも見つからない場合は、変更前の単価を維持する
     setEditUnitPrice(currentUnitPrice);
   };
 
@@ -429,6 +429,9 @@ export default function HistoryPage() {
                           className="w-full p-1.5 border rounded text-xs bg-white font-bold text-green-700"
                           min="0"
                         />
+                        <div className="mt-1 text-[11px] font-bold text-gray-600">
+                          反映される金額: ¥{(editUnitPrice * editQuantity).toLocaleString()}
+                        </div>
                       </div>
                     )}
 
