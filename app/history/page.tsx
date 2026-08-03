@@ -6,6 +6,7 @@ import Link from 'next/link';
 export default function HistoryPage() {
   const [historyList, setHistoryList] = useState<any[]>([]);
   const [productMap, setProductMap] = useState<{ [barcode: string]: { name: string } }>({});
+  const [storeList, setStoreList] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   // 今月の年月を YYYY-MM 形式で取得
@@ -22,7 +23,7 @@ export default function HistoryPage() {
   const [editQuantity, setEditQuantity] = useState<number>(0);
   const [editStoreName, setEditStoreName] = useState<string>('');
 
-  // 履歴データと製品マスタを取得
+  // 履歴データ、製品マスタ、店舗一覧を取得
   const fetchData = async () => {
     setLoading(true);
     
@@ -36,7 +37,14 @@ export default function HistoryPage() {
     }
     setProductMap(map);
 
-    // 2. 履歴取得
+    // 2. 店舗一覧取得（inventory テーブルから重複を除いて取得、またはマスタ等があればそこから）
+    const { data: invData } = await supabase.from('inventory').select('store_name');
+    if (invData) {
+      const stores = Array.from(new Set(invData.map((item) => item.store_name).filter(Boolean)));
+      setStoreList(stores);
+    }
+
+    // 3. 履歴取得
     const { data: histData, error } = await supabase
       .from('history')
       .select('*')
@@ -102,7 +110,7 @@ export default function HistoryPage() {
       return;
     }
     if (!newStore) {
-      alert('店舗名を入力してください');
+      alert('店舗名を選択してください');
       return;
     }
 
@@ -338,12 +346,18 @@ export default function HistoryPage() {
                       </div>
                       <div>
                         <label className="block text-[10px] font-bold text-gray-600 mb-0.5">店舗名</label>
-                        <input
-                          type="text"
+                        <select
                           value={editStoreName}
                           onChange={(e) => setEditStoreName(e.target.value)}
                           className="w-full p-1.5 border rounded text-xs bg-white font-bold"
-                        />
+                        >
+                          <option value="">店舗を選択</option>
+                          {storeList.map((store) => (
+                            <option key={store} value={store}>
+                              {store}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     </div>
 
