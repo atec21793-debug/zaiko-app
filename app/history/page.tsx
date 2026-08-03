@@ -5,7 +5,7 @@ import Link from 'next/link';
 
 export default function HistoryPage() {
   const [historyList, setHistoryList] = useState<any[]>([]);
-  const [productMap, setProductMap] = useState<{ [barcode: string]: { name: string } }>({});
+  const [productMap, setProductMap] = useState<{ [barcode: string]: { name: string; unit_price?: number } }>({});
   const [storeList, setStoreList] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -28,19 +28,18 @@ export default function HistoryPage() {
 
   // 履歴データ、製品マスタ、店舗一覧を取得
   const fetchData = async (preserveScroll = false) => {
-    // データを再取得する前に現在のスクロール位置を保存
     if (preserveScroll) {
       scrollPositionRef.current = window.scrollY;
     } else {
       setLoading(true);
     }
     
-    // 1. 製品マスタ取得
+    // 1. 製品マスタ取得（unit_priceも一緒に取得して単価の初期値候補にする）
     const { data: prodData } = await supabase.from('products').select('*');
-    const map: { [barcode: string]: { name: string } } = {};
+    const map: { [barcode: string]: { name: string; unit_price?: number } } = {};
     if (prodData) {
       prodData.forEach((p) => {
-        map[p.barcode] = { name: p.name };
+        map[p.barcode] = { name: p.name, unit_price: p.unit_price };
       });
     }
     setProductMap(map);
@@ -66,7 +65,6 @@ export default function HistoryPage() {
     }
     setLoading(false);
 
-    // 再描画が終わったあとにスクロール位置を復元
     if (preserveScroll) {
       requestAnimationFrame(() => {
         window.scrollTo(0, scrollPositionRef.current);
@@ -109,6 +107,47 @@ export default function HistoryPage() {
 
     alert('取り消し処理が完了しました。');
     fetchData(true);
+  };
+
+  // 店舗を変更したときに、その店舗におけるその商品の単価を自動で取得してセットする関数
+  const handleStoreChangeForEdit = async (barcode: string, newStore: string) => {
+    setEditStoreName(newStore);
+    if (!barcode || !newStore) return;
+
+    // 1. まず inventory テーブルから該当店舗・該当商品の単価があればそれを取得する
+    const { data: invData } = await supabase
+      .from('inventory')
+      .select('unit_price')
+      .eq('barcode', barcode)
+      .eq('store_name', newStore)
+      .maybeSingle();
+
+    if (invData && invData.unit_price !== null && invData.unit_price !== undefined) {
+      setEditUnitPrice(Number(invData.unit_price));
+      return;
+    }
+
+    // 2. inventory に単価がなければ、直近の history から同じ店舗・商品の出庫単価を探す
+    const { data: histData } = await supabase
+      .from('history')
+      .select('unit_price')
+      .eq('barcode', barcode)
+      .eq('store_name', newStore)
+      .eq('type', '出庫')
+      .not('unit_price', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (histData && histData.length > 0 && histData[0].unit_price !== null) {
+      setEditUnitPrice(Number(histData[0].unit_price));
+      return;
+    }
+
+    // 3. それも見つからなければ、製品マスタ（products）の基本単価があればそれを設定する
+    const prodInfo = productMap[barcode];
+    if (prodInfo && prodInfo.unit_price !== undefined && prodInfo.unit_price !== null) {
+      setEditUnitPrice(Number(prodInfo.unit_price));
+    }
   };
 
   const handleSaveEdit = async (item: any) => {
@@ -363,7 +402,7 @@ export default function HistoryPage() {
                         <label className="block text-[10px] font-bold text-gray-600 mb-0.5">店舗名</label>
                         <select
                           value={editStoreName}
-                          onChange={(e) => setEditStoreName(e.target.value)}
+                          onChange={(e) => handleStoreChangeForEdit(item.barcode, e.target.value)}
                           className="w-full p-1.5 border rounded text-xs bg-white font-bold"
                         >
                           <option value="">店舗を選択</option>
@@ -378,7 +417,7 @@ export default function HistoryPage() {
 
                     {item.type === '出庫' && (
                       <div>
-                        <label className="block text-[10px] font-bold text-gray-600 mb-0.5">単価</label>
+                        <label className="block text-[10px] font-bold text-gray-600 mb-0.5">単価（店舗変更で自動反映）</label>
                         <input
                           type="number"
                           value={editUnitPrice}
