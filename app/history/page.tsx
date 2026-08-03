@@ -11,14 +11,16 @@ export default function HistoryPage() {
   // 今月の年月を YYYY-MM 形式で取得
   const todayStr = new Date().toISOString().substring(0, 7);
   const [selectedMonth, setSelectedMonth] = useState(todayStr); 
-  const [selectedUserForDetail, setSelectedUserForDetail] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<'all' | '出庫' | '入庫'>('all');
   const [searchStore, setSearchStore] = useState('');
   const [searchMaterial, setSearchMaterial] = useState('');
 
+  // 編集用の状態（単価・個数・店舗名）
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editUnitPrice, setEditUnitPrice] = useState<number>(0);
+  const [editQuantity, setEditQuantity] = useState<number>(0);
+  const [editStoreName, setEditStoreName] = useState<string>('');
 
   // 履歴データと製品マスタを取得
   const fetchData = async () => {
@@ -86,26 +88,48 @@ export default function HistoryPage() {
     fetchData();
   };
 
-  const handleSavePrice = async (item: any) => {
+  // 編集内容を保存する処理（在庫数の自動調整も含める場合、必要に応じて調整可能ですがまずは履歴側の更新を行います）
+  const handleSaveEdit = async (item: any) => {
     const newUnitPrice = Number(editUnitPrice);
+    const newQuantity = Number(editQuantity);
+    const newStore = editStoreName.trim();
+
     if (isNaN(newUnitPrice) || newUnitPrice < 0) {
       alert('正しい単価を入力してください');
       return;
     }
+    if (isNaN(newQuantity) || newQuantity <= 0) {
+      alert('数量は1以上を入力してください');
+      return;
+    }
+    if (!newStore) {
+      alert('店舗名を入力してください');
+      return;
+    }
 
-    const newTotalAmount = newUnitPrice * item.quantity;
+    // 在庫数の変動を考慮する場合の差分計算などが必要であればここに追加できますが、
+    // まずは履歴データの数量・単価・合計金額・店舗名を安全に更新します
+    const newTotalAmount = item.type === '出庫' ? newUnitPrice * newQuantity : (item.total_amount || 0);
+
+    const updatePayload: any = {
+      quantity: newQuantity,
+      store_name: newStore,
+    };
+
+    if (item.type === '出庫') {
+      updatePayload.unit_price = newUnitPrice;
+      updatePayload.total_amount = newTotalAmount;
+    }
+
     const { error } = await supabase
       .from('history')
-      .update({
-        unit_price: newUnitPrice,
-        total_amount: newTotalAmount,
-      })
+      .update(updatePayload)
       .eq('id', item.id);
 
     if (error) {
-      alert('価格の修正に失敗しました: ' + error.message);
+      alert('履歴の修正に失敗しました: ' + error.message);
     } else {
-      alert('出庫価格を修正しました！');
+      alert('履歴を修正しました！');
       setEditingId(null);
       fetchData();
     }
@@ -115,11 +139,9 @@ export default function HistoryPage() {
   const getItemMonthStr = (createdAt: string) => {
     if (!createdAt) return '';
     try {
-      // データベースの日時文字列（例: 2026-07-30T15:00:00+00）に +9時間（日本時間）を足した日付オブジェクトを作る
       const date = new Date(createdAt);
       if (isNaN(date.getTime())) return createdAt.substring(0, 7);
 
-      // 日本時間のYYYY-MMを強制的に作成
       const jstDate = new Date(date.getTime() + (9 * 60 * 60 * 1000));
       return jstDate.toISOString().substring(0, 7);
     } catch (e) {
@@ -154,51 +176,6 @@ export default function HistoryPage() {
     });
   }, [historyList, activeTab, selectedMonth, searchStore, searchMaterial, productMap]);
 
-  const userSummary = useMemo(() => {
-    const summary: { [key: string]: number } = {};
-    historyList
-      .filter((item) => {
-        const itemMonthStr = getItemMonthStr(item.created_at);
-        const matchMonth = !selectedMonth || itemMonthStr === selectedMonth;
-        return matchMonth && item.type === '出庫' && item.user_name && item.user_name !== '-';
-      })
-      .forEach((item) => {
-        const amount = item.total_amount !== undefined && item.total_amount !== null 
-          ? Number(item.total_amount) 
-          : (Number(item.unit_price || 0) * item.quantity);
-
-        summary[item.user_name] = (summary[item.user_name] || 0) + amount;
-      });
-    return summary;
-  }, [historyList, selectedMonth]);
-
-  const selectedUserMaterials = useMemo(() => {
-    if (!selectedUserForDetail) return [];
-    const materialMap: { [name: string]: { name: string; quantity: number; totalAmount: number } } = {};
-
-    historyList
-      .filter((item) => {
-        const itemMonthStr = getItemMonthStr(item.created_at);
-        const matchMonth = !selectedMonth || itemMonthStr === selectedMonth;
-        return matchMonth && item.type === '出庫' && item.user_name === selectedUserForDetail;
-      })
-      .forEach((item) => {
-        const prodInfo = productMap[item.barcode];
-        const name = prodInfo ? prodInfo.name : `(未登録: ${item.barcode})`;
-        const amount = item.total_amount !== undefined && item.total_amount !== null 
-          ? Number(item.total_amount) 
-          : (Number(item.unit_price || 0) * item.quantity);
-
-        if (!materialMap[name]) {
-          materialMap[name] = { name, quantity: 0, totalAmount: 0 };
-        }
-        materialMap[name].quantity += item.quantity;
-        materialMap[name].totalAmount += amount;
-      });
-
-    return Object.values(materialMap);
-  }, [historyList, selectedMonth, selectedUserForDetail, productMap]);
-
   return (
     <main className="w-full max-w-full p-4 bg-gray-50 min-h-screen">
       <div className="flex items-center justify-between mb-4">
@@ -218,7 +195,7 @@ export default function HistoryPage() {
           <input 
             type="month" 
             value={selectedMonth} 
-            onChange={(e) => { setSelectedMonth(e.target.value); setSelectedUserForDetail(null); }}
+            onChange={(e) => setSelectedMonth(e.target.value)}
             className="w-full p-2 border rounded-lg text-base bg-gray-50 font-bold"
           />
         </div>
@@ -246,61 +223,6 @@ export default function HistoryPage() {
           </div>
         </div>
       </div>
-
-      <div className="bg-gray-800 text-white p-4 rounded-xl shadow-md mb-6">
-        <h2 className="text-sm font-bold mb-2 border-b border-gray-700 pb-1">
-          👤 出庫者別 合計金額 ({selectedMonth || '全期間'})
-        </h2>
-        {Object.keys(userSummary).length === 0 ? (
-          <p className="text-xs text-gray-400 py-2">この条件に該当する出庫データはありません</p>
-        ) : (
-          <div className="space-y-2 mt-2">
-            {Object.entries(userSummary).map(([user, total]) => (
-              <div 
-                key={user}
-                onClick={() => setSelectedUserForDetail(selectedUserForDetail === user ? null : user)}
-                className={`flex justify-between items-center p-2.5 rounded-lg cursor-pointer transition ${
-                  selectedUserForDetail === user ? 'bg-gray-700 ring-2 ring-blue-400' : 'bg-gray-900/50 hover:bg-gray-700'
-                }`}
-              >
-                <span className="text-sm font-bold flex items-center gap-1">
-                  {user} <span className="text-[10px] text-gray-400 font-normal">（タップで詳細）</span>
-                </span>
-                <span className="text-base font-black text-green-400">¥{total.toLocaleString()}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {selectedUserForDetail && (
-        <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl mb-6 shadow-sm">
-          <div className="flex justify-between items-center mb-2">
-            <h3 className="font-bold text-sm text-blue-900">
-              📦 {selectedUserForDetail} さんの使用材料（全店舗合算）
-            </h3>
-            <button 
-              type="button" 
-              onClick={() => setSelectedUserForDetail(null)}
-              className="text-xs text-blue-600 font-bold bg-white px-2 py-1 rounded border shadow-xs"
-            >
-              閉じる
-            </button>
-          </div>
-          {selectedUserMaterials.length === 0 ? (
-            <p className="text-xs text-gray-500">データがありません</p>
-          ) : (
-            <div className="space-y-1.5 max-h-48 overflow-y-auto">
-              {selectedUserMaterials.map((m) => (
-                <div key={m.name} className="bg-white p-2 rounded border text-xs flex justify-between items-center">
-                  <span className="font-bold text-gray-800">{m.name}</span>
-                  <span className="font-bold">合計: {m.quantity}個 (¥{m.totalAmount.toLocaleString()})</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
       <div className="flex rounded-xl bg-gray-200 p-1 mb-4 font-bold text-sm">
         <button
@@ -372,64 +294,93 @@ export default function HistoryPage() {
                   </div>
                 </div>
 
-                <div className="flex justify-between font-bold text-gray-800">
-                  <span className="text-base">{productName}</span>
-                  <span>{item.quantity} 個</span>
-                </div>
+                {!isEditing ? (
+                  <>
+                    <div className="flex justify-between font-bold text-gray-800">
+                      <span className="text-base">{productName}</span>
+                      <span>{item.quantity} 個</span>
+                    </div>
 
-                <div className="flex justify-between text-xs text-gray-600">
-                  <span>店舗: {item.store_name}</span>
-                  <span>担当: {item.user_name || '-'}</span>
-                </div>
-
-                {item.type === '出庫' && (
-                  <div className="mt-2 pt-2 border-t border-gray-100">
-                    {!isEditing ? (
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="font-bold text-gray-700">
-                          金額: ¥{totalAmount.toLocaleString()} (単価: ¥{unitPrice.toLocaleString()})
-                        </span>
+                    <div className="flex justify-between text-xs text-gray-600 items-center">
+                      <span>店舗: {item.store_name}</span>
+                      <div className="flex items-center gap-2">
+                        <span>担当: {item.user_name || '-'}</span>
                         <button
                           type="button"
                           onClick={() => {
                             setEditingId(item.id);
                             setEditUnitPrice(unitPrice);
+                            setEditQuantity(item.quantity);
+                            setEditStoreName(item.store_name || '');
                           }}
                           className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded font-bold text-[11px] border"
                         >
-                          金額を修正
+                          内容を修正
                         </button>
                       </div>
-                    ) : (
-                      <div className="flex items-center gap-2 bg-gray-50 p-2 rounded border">
-                        <div className="flex-1">
-                          <label className="block text-[10px] font-bold text-gray-600 mb-0.5">新しい単価を入力</label>
-                          <input
-                            type="number"
-                            value={editUnitPrice}
-                            onChange={(e) => setEditUnitPrice(Number(e.target.value))}
-                            className="w-full p-1.5 border rounded text-xs bg-white font-bold text-green-700"
-                            min="0"
-                          />
-                        </div>
-                        <div className="flex gap-1 pt-4">
-                          <button
-                            type="button"
-                            onClick={() => handleSavePrice(item)}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold text-xs shadow-xs"
-                          >
-                            保存
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setEditingId(null)}
-                            className="px-2 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded font-bold text-xs"
-                          >
-                            キャンセル
-                          </button>
-                        </div>
+                    </div>
+
+                    {item.type === '出庫' && (
+                      <div className="mt-1 pt-2 border-t border-gray-100 text-xs font-bold text-gray-700">
+                        金額: ¥{totalAmount.toLocaleString()} (単価: ¥{unitPrice.toLocaleString()})
                       </div>
                     )}
+                  </>
+                ) : (
+                  <div className="flex flex-col gap-2 bg-gray-50 p-3 rounded-lg border mt-1">
+                    <div className="text-xs font-bold text-gray-800 mb-1">{productName} の修正</div>
+                    
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-600 mb-0.5">数量</label>
+                        <input
+                          type="number"
+                          value={editQuantity}
+                          onChange={(e) => setEditQuantity(Number(e.target.value))}
+                          className="w-full p-1.5 border rounded text-xs bg-white font-bold"
+                          min="1"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-600 mb-0.5">店舗名</label>
+                        <input
+                          type="text"
+                          value={editStoreName}
+                          onChange={(e) => setEditStoreName(e.target.value)}
+                          className="w-full p-1.5 border rounded text-xs bg-white font-bold"
+                        />
+                      </div>
+                    </div>
+
+                    {item.type === '出庫' && (
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-600 mb-0.5">単価</label>
+                        <input
+                          type="number"
+                          value={editUnitPrice}
+                          onChange={(e) => setEditUnitPrice(Number(e.target.value))}
+                          className="w-full p-1.5 border rounded text-xs bg-white font-bold text-green-700"
+                          min="0"
+                        />
+                      </div>
+                    )}
+
+                    <div className="flex justify-end gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditingId(null)}
+                        className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded font-bold text-xs"
+                      >
+                        キャンセル
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSaveEdit(item)}
+                        className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold text-xs shadow-xs"
+                      >
+                        保存
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
