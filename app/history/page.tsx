@@ -36,7 +36,7 @@ export default function HistoryPage() {
     }
     setProductMap(map);
 
-    // 2. 履歴取得（上限100件を超えるため、limitを広げて安全に取得）
+    // 2. 履歴取得
     const { data: histData, error } = await supabase
       .from('history')
       .select('*')
@@ -88,7 +88,6 @@ export default function HistoryPage() {
     fetchData();
   };
 
-  // 編集内容を保存する処理（在庫数の自動調整も含める場合、必要に応じて調整可能ですがまずは履歴側の更新を行います）
   const handleSaveEdit = async (item: any) => {
     const newUnitPrice = Number(editUnitPrice);
     const newQuantity = Number(editQuantity);
@@ -107,8 +106,6 @@ export default function HistoryPage() {
       return;
     }
 
-    // 在庫数の変動を考慮する場合の差分計算などが必要であればここに追加できますが、
-    // まずは履歴データの数量・単価・合計金額・店舗名を安全に更新します
     const newTotalAmount = item.type === '出庫' ? newUnitPrice * newQuantity : (item.total_amount || 0);
 
     const updatePayload: any = {
@@ -135,13 +132,11 @@ export default function HistoryPage() {
     }
   };
 
-  // ★ 超高速で確実にYYYY-MMを取り出す関数（タイムゾーンのズレをここで安全に吸収）
   const getItemMonthStr = (createdAt: string) => {
     if (!createdAt) return '';
     try {
       const date = new Date(createdAt);
       if (isNaN(date.getTime())) return createdAt.substring(0, 7);
-
       const jstDate = new Date(date.getTime() + (9 * 60 * 60 * 1000));
       return jstDate.toISOString().substring(0, 7);
     } catch (e) {
