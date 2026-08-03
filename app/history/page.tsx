@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import Link from 'next/link';
 
@@ -8,6 +8,9 @@ export default function HistoryPage() {
   const [productMap, setProductMap] = useState<{ [barcode: string]: { name: string } }>({});
   const [storeList, setStoreList] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // スクロール位置を保持するための参照
+  const scrollPositionRef = useRef<number>(0);
 
   // 今月の年月を YYYY-MM 形式で取得
   const todayStr = new Date().toISOString().substring(0, 7);
@@ -24,8 +27,13 @@ export default function HistoryPage() {
   const [editStoreName, setEditStoreName] = useState<string>('');
 
   // 履歴データ、製品マスタ、店舗一覧を取得
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (preserveScroll = false) => {
+    // データを再取得する前に現在のスクロール位置を保存
+    if (preserveScroll) {
+      scrollPositionRef.current = window.scrollY;
+    } else {
+      setLoading(true);
+    }
     
     // 1. 製品マスタ取得
     const { data: prodData } = await supabase.from('products').select('*');
@@ -37,7 +45,7 @@ export default function HistoryPage() {
     }
     setProductMap(map);
 
-    // 2. 店舗一覧取得（inventory テーブルから重複を除いて取得、またはマスタ等があればそこから）
+    // 2. 店舗一覧取得
     const { data: invData } = await supabase.from('inventory').select('store_name');
     if (invData) {
       const stores = Array.from(new Set(invData.map((item) => item.store_name).filter(Boolean)));
@@ -57,10 +65,17 @@ export default function HistoryPage() {
       setHistoryList(histData);
     }
     setLoading(false);
+
+    // 再描画が終わったあとにスクロール位置を復元
+    if (preserveScroll) {
+      requestAnimationFrame(() => {
+        window.scrollTo(0, scrollPositionRef.current);
+      });
+    }
   };
 
   useEffect(() => {
-    fetchData();
+    fetchData(false);
   }, []);
 
   const handleDelete = async (item: any) => {
@@ -93,7 +108,7 @@ export default function HistoryPage() {
     }
 
     alert('取り消し処理が完了しました。');
-    fetchData();
+    fetchData(true);
   };
 
   const handleSaveEdit = async (item: any) => {
@@ -136,7 +151,7 @@ export default function HistoryPage() {
     } else {
       alert('履歴を修正しました！');
       setEditingId(null);
-      fetchData();
+      fetchData(true);
     }
   };
 
