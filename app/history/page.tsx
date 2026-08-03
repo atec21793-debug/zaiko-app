@@ -34,7 +34,7 @@ export default function HistoryPage() {
       setLoading(true);
     }
     
-    // 1. 製品マスタ取得
+    // 1. 製品マスタ取得（unit_priceも取得）
     const { data: prodData } = await supabase.from('products').select('*');
     const map: { [barcode: string]: { name: string; unit_price?: number } } = {};
     if (prodData) {
@@ -110,11 +110,17 @@ export default function HistoryPage() {
   };
 
   // 店舗を変更したときの単価自動取得
-  const handleStoreChangeForEdit = async (barcode: string, newStore: string, currentUnitPrice: number) => {
+  const handleStoreChangeForEdit = async (barcode: string, newStore: string) => {
     setEditStoreName(newStore);
     if (!barcode || !newStore) return;
 
-    // 1. まず inventory テーブルから該当店舗・商品の単価を探す
+    // 1. まず製品マスタの標準単価をベース候補として取得
+    const prodInfo = productMap[barcode];
+    let resolvedPrice = (prodInfo && prodInfo.unit_price !== undefined && prodInfo.unit_price !== null) 
+      ? Number(prodInfo.unit_price) 
+      : 0;
+
+    // 2. inventory テーブルに該当店舗・商品の単価があればそれを優先する
     const { data: invData } = await supabase
       .from('inventory')
       .select('unit_price')
@@ -123,35 +129,25 @@ export default function HistoryPage() {
       .maybeSingle();
 
     if (invData && invData.unit_price !== null && invData.unit_price !== undefined) {
-      setEditUnitPrice(Number(invData.unit_price));
-      return;
+      resolvedPrice = Number(invData.unit_price);
+    } else {
+      // 3. inventory になければ、過去の history から同じ店舗・商品の出庫単価を探す
+      const { data: histData } = await supabase
+        .from('history')
+        .select('unit_price')
+        .eq('barcode', barcode)
+        .eq('store_name', newStore)
+        .eq('type', '出庫')
+        .not('unit_price', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (histData && histData.length > 0 && histData[0].unit_price !== null) {
+        resolvedPrice = Number(histData[0].unit_price);
+      }
     }
 
-    // 2. 過去の履歴（history）から同じ店舗・商品の出庫単価を探す
-    const { data: histData } = await supabase
-      .from('history')
-      .select('unit_price')
-      .eq('barcode', barcode)
-      .eq('store_name', newStore)
-      .eq('type', '出庫')
-      .not('unit_price', 'is', null)
-      .order('created_at', { ascending: false })
-      .limit(1);
-
-    if (histData && histData.length > 0 && histData[0].unit_price !== null) {
-      setEditUnitPrice(Number(histData[0].unit_price));
-      return;
-    }
-
-    // 3. 製品マスタ（products）の基本単価を探す
-    const prodInfo = productMap[barcode];
-    if (prodInfo && prodInfo.unit_price !== undefined && prodInfo.unit_price !== null) {
-      setEditUnitPrice(Number(prodInfo.unit_price));
-      return;
-    }
-
-    // 4. それも見つからない場合は、変更前の単価を維持する
-    setEditUnitPrice(currentUnitPrice);
+    setEditUnitPrice(resolvedPrice);
   };
 
   const handleSaveEdit = async (item: any) => {
@@ -406,7 +402,7 @@ export default function HistoryPage() {
                         <label className="block text-[10px] font-bold text-gray-600 mb-0.5">店舗名</label>
                         <select
                           value={editStoreName}
-                          onChange={(e) => handleStoreChangeForEdit(item.barcode, e.target.value, unitPrice)}
+                          onChange={(e) => handleStoreChangeForEdit(item.barcode, e.target.value)}
                           className="w-full p-1.5 border rounded text-xs bg-white font-bold"
                         >
                           <option value="">店舗を選択</option>
