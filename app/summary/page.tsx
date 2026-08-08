@@ -356,7 +356,7 @@ export default function SummaryPage() {
             <div>
               <div className="text-xs font-bold text-gray-300 flex items-center gap-1.5">
                 <span>🛒 購入合計</span>
-                <span className="text-[10px] bg-indigo-600 px-2 py-0.5 rounded text-white group-hover:bg-indigo-500">タップして入力・一覧</span>
+                
               </div>
               <div className="text-xl font-black text-green-400 mt-1">
                 ¥{totalPurchaseAmount.toLocaleString()}
