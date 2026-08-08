@@ -306,31 +306,54 @@ export default function SummaryPage() {
         </div>
       </div>
 
-      {/* 出庫者別 合計金額カード */}
-      <div className="bg-gray-800 text-white p-4 rounded-xl shadow-md mb-6">
-        <h2 className="text-sm font-bold mb-2 border-b border-gray-700 pb-1">
-          👤 出庫者別 合計金額 ({selectedMonth || '全期間'})
-        </h2>
-        {Object.keys(userSummary).length === 0 ? (
-          <p className="text-xs text-gray-400 py-2">この条件に該当する出庫データはありません</p>
-        ) : (
-          <div className="space-y-2 mt-2">
-            {Object.entries(userSummary).map(([user, total]) => (
-              <div 
-                key={user}
-                onClick={() => setSelectedUserForDetail(selectedUserForDetail === user ? null : user)}
-                className={`flex justify-between items-center p-2.5 rounded-lg cursor-pointer transition ${
-                  selectedUserForDetail === user ? 'bg-gray-700 ring-2 ring-blue-400' : 'bg-gray-900/50 hover:bg-gray-700'
-                }`}
-              >
-                <span className="text-sm font-bold flex items-center gap-1">
-                  {user} <span className="text-[10px] text-gray-400 font-normal">（タップで詳細）</span>
-                </span>
-                <span className="text-base font-black text-green-400">¥{total.toLocaleString()}</span>
+      {/* --- 出庫者別 合計金額カード（購入合計を内部に統合） --- */}
+      <div className="bg-gray-800 text-white p-4 rounded-xl shadow-md mb-6 space-y-4">
+        <div>
+          <h2 className="text-sm font-bold mb-2 border-b border-gray-700 pb-1">
+            👤 出庫者別 合計金額 ({selectedMonth || '全期間'})
+          </h2>
+          {Object.keys(userSummary).length === 0 ? (
+            <p className="text-xs text-gray-400 py-2">この条件に該当する出庫データはありません</p>
+          ) : (
+            <div className="space-y-2 mt-2">
+              {Object.entries(userSummary).map(([user, total]) => (
+                <div 
+                  key={user}
+                  onClick={() => setSelectedUserForDetail(selectedUserForDetail === user ? null : user)}
+                  className={`flex justify-between items-center p-2.5 rounded-lg cursor-pointer transition ${
+                    selectedUserForDetail === user ? 'bg-gray-700 ring-2 ring-blue-400' : 'bg-gray-900/50 hover:bg-gray-700'
+                  }`}
+                >
+                  <span className="text-sm font-bold flex items-center gap-1">
+                    {user} <span className="text-[10px] text-gray-400 font-normal">（タップで詳細）</span>
+                  </span>
+                  <span className="text-base font-black text-green-400">¥{total.toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 出庫者エリア内の下部に配置された購入合計 */}
+        <div 
+          onClick={() => setIsMaterialModalOpen(true)}
+          className="pt-3 border-t border-gray-700 cursor-pointer group"
+        >
+          <div className="flex justify-between items-center bg-gray-900/70 p-3 rounded-lg hover:bg-gray-700 transition">
+            <div>
+              <div className="text-xs font-bold text-gray-300 flex items-center gap-1.5">
+                <span>🛒 購入合計</span>
+                <span className="text-[10px] bg-indigo-600 px-2 py-0.5 rounded text-white group-hover:bg-indigo-500">タップして入力・一覧</span>
               </div>
-            ))}
+              <div className="text-xl font-black text-green-400 mt-1">
+                ¥{totalPurchaseAmount.toLocaleString()}
+              </div>
+            </div>
+            <div className="text-gray-400 text-xs font-bold bg-gray-800 px-2.5 py-1.5 rounded border border-gray-700">
+              管理 &gt;
+            </div>
           </div>
-        )}
+        </div>
       </div>
 
       {/* 選択された出庫者の詳細パネル */}
@@ -362,20 +385,6 @@ export default function SummaryPage() {
           )}
         </div>
       )}
-
-      {/* --- 出庫者別の下に移動：購入合計カード（タップで入力・一覧モーダルが開く） --- */}
-      <div 
-        onClick={() => setIsMaterialModalOpen(true)}
-        className="bg-indigo-900 text-white p-4 rounded-xl shadow-md mb-6 cursor-pointer hover:bg-indigo-800 transition"
-      >
-        <div className="text-xs font-bold mb-1 text-indigo-200 flex justify-between items-center">
-          <span>🛒 購入合計 ({selectedMonth || '全期間'})</span>
-          <span className="text-[10px] bg-indigo-700 px-2 py-0.5 rounded text-white">タップして入力・一覧</span>
-        </div>
-        <div className="text-2xl font-black text-green-400">
-          ¥{totalPurchaseAmount.toLocaleString()}
-        </div>
-      </div>
 
       {/* 集計結果テーブル/リスト */}
       <h2 className="font-bold text-base mb-3">材料別 入出庫内訳 ({summaryData.length}件)</h2>
