@@ -306,20 +306,6 @@ export default function SummaryPage() {
         </div>
       </div>
 
-      {/* --- 追加：購入材料の金額合計カード（タップで入力・一覧モーダルが開く） --- */}
-      <div 
-        onClick={() => setIsMaterialModalOpen(true)}
-        className="bg-indigo-900 text-white p-4 rounded-xl shadow-md mb-6 cursor-pointer hover:bg-indigo-800 transition"
-      >
-        <div className="text-xs font-bold mb-1 text-indigo-200 flex justify-between items-center">
-          <span>🛒 買った材料の金額の合計 ({selectedMonth || '全期間'})</span>
-          <span className="text-[10px] bg-indigo-700 px-2 py-0.5 rounded text-white">タップして入力・一覧</span>
-        </div>
-        <div className="text-2xl font-black text-green-400">
-          ¥{totalPurchaseAmount.toLocaleString()}
-        </div>
-      </div>
-
       {/* 出庫者別 合計金額カード */}
       <div className="bg-gray-800 text-white p-4 rounded-xl shadow-md mb-6">
         <h2 className="text-sm font-bold mb-2 border-b border-gray-700 pb-1">
@@ -376,6 +362,20 @@ export default function SummaryPage() {
           )}
         </div>
       )}
+
+      {/* --- 出庫者別の下に移動：購入合計カード（タップで入力・一覧モーダルが開く） --- */}
+      <div 
+        onClick={() => setIsMaterialModalOpen(true)}
+        className="bg-indigo-900 text-white p-4 rounded-xl shadow-md mb-6 cursor-pointer hover:bg-indigo-800 transition"
+      >
+        <div className="text-xs font-bold mb-1 text-indigo-200 flex justify-between items-center">
+          <span>🛒 購入合計 ({selectedMonth || '全期間'})</span>
+          <span className="text-[10px] bg-indigo-700 px-2 py-0.5 rounded text-white">タップして入力・一覧</span>
+        </div>
+        <div className="text-2xl font-black text-green-400">
+          ¥{totalPurchaseAmount.toLocaleString()}
+        </div>
+      </div>
 
       {/* 集計結果テーブル/リスト */}
       <h2 className="font-bold text-base mb-3">材料別 入出庫内訳 ({summaryData.length}件)</h2>
