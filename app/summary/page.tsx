@@ -40,7 +40,16 @@ export default function SummaryPage() {
   // --- 材料購入に関する状態 ---
   const [purchases, setPurchases] = useState<MaterialPurchase[]>([]);
   const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
-  const [newDate, setNewDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  
+  // 日付の初期値を確実に YYYY-MM-DD 形式の文字列にする
+  const [newDate, setNewDate] = useState<string>(() => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
+
   const [newStore, setNewStore] = useState<string>(STORE_LIST[0]);
   const [newAmount, setNewAmount] = useState<string>('');
 
@@ -111,7 +120,10 @@ export default function SummaryPage() {
   // 材料購入の追加処理
   const handleAddPurchase = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newAmount) return;
+    if (!newAmount || !newDate) {
+      alert('日付と金額を入力してください');
+      return;
+    }
 
     const { error } = await supabase.from('material_purchases').insert([
       {
@@ -123,6 +135,7 @@ export default function SummaryPage() {
 
     if (error) {
       console.error('Error adding purchase:', error);
+      alert('登録に失敗しました: ' + error.message);
     } else {
       setNewAmount('');
       fetchPurchases();
@@ -433,58 +446,48 @@ export default function SummaryPage() {
 
             <div className="p-4 overflow-y-auto flex-1 space-y-4">
               {/* 入力フォーム */}
-<form 
-  onSubmit={(e) => {
-    e.preventDefault();
-    if (!newAmount || !newDate) {
-      alert('日付と金額を正しく入力してください');
-      return;
-    }
-    handleAddPurchase(e);
-  }} 
-  className="bg-gray-50 p-3 rounded-xl border border-gray-200 space-y-3"
->
-  <div className="text-xs font-bold text-gray-700">新規購入データの追加</div>
-  <div>
-    <label className="block text-[10px] font-bold text-gray-500 mb-1">日付</label>
-    <input 
-      type="date"
-      value={newDate}
-      onChange={(e) => setNewDate(e.target.value)}
-      className="w-full text-sm p-2 border rounded-lg bg-white text-gray-800 font-bold"
-      required
-    />
-  </div>
-  <div>
-    <label className="block text-[10px] font-bold text-gray-500 mb-1">店舗名（選択）</label>
-    <select 
-      value={newStore}
-      onChange={(e) => setNewStore(e.target.value)}
-      className="w-full text-sm p-2 border rounded-lg bg-white text-gray-800 font-bold"
-    >
-      {STORE_LIST.map((storeName) => (
-        <option key={storeName} value={storeName}>{storeName}</option>
-      ))}
-    </select>
-  </div>
-  <div>
-    <label className="block text-[10px] font-bold text-gray-500 mb-1">金額 (円)</label>
-    <input 
-      type="number"
-      placeholder="例: 15000"
-      value={newAmount}
-      onChange={(e) => setNewAmount(e.target.value)}
-      className="w-full text-sm p-2 border rounded-lg bg-white text-gray-800 font-bold"
-      required
-    />
-  </div>
-  <button 
-    type="submit"
-    className="w-full py-2.5 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 active:bg-indigo-800 transition shadow-sm cursor-pointer"
-  >
-    追加する
-  </button>
-</form>
+              <form onSubmit={handleAddPurchase} className="bg-gray-50 p-3 rounded-xl border border-gray-200 space-y-3">
+                <div className="text-xs font-bold text-gray-700">新規購入データの追加</div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 mb-1">日付</label>
+                  <input 
+                    type="date"
+                    value={newDate}
+                    onChange={(e) => setNewDate(e.target.value)}
+                    className="w-full text-sm p-2 border rounded-lg bg-white text-gray-800 font-bold"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 mb-1">店舗名（選択）</label>
+                  <select 
+                    value={newStore}
+                    onChange={(e) => setNewStore(e.target.value)}
+                    className="w-full text-sm p-2 border rounded-lg bg-white text-gray-800 font-bold"
+                  >
+                    {STORE_LIST.map((storeName) => (
+                      <option key={storeName} value={storeName}>{storeName}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 mb-1">金額 (円)</label>
+                  <input 
+                    type="number"
+                    placeholder="例: 15000"
+                    value={newAmount}
+                    onChange={(e) => setNewAmount(e.target.value)}
+                    className="w-full text-sm p-2 border rounded-lg bg-white text-gray-800 font-bold"
+                    required
+                  />
+                </div>
+                <button 
+                  type="submit"
+                  className="w-full py-2.5 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 active:bg-indigo-800 transition shadow-sm cursor-pointer"
+                >
+                  追加する
+                </button>
+              </form>
 
               {/* 一覧表示エリア */}
               <div>
