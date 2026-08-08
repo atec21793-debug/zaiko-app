@@ -433,48 +433,58 @@ export default function SummaryPage() {
 
             <div className="p-4 overflow-y-auto flex-1 space-y-4">
               {/* 入力フォーム */}
-              <form onSubmit={handleAddPurchase} className="bg-gray-50 p-3 rounded-xl border border-gray-200 space-y-3">
-                <div className="text-xs font-bold text-gray-700">新規購入データの追加</div>
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-500 mb-1">日付</label>
-                  <input 
-                    type="date"
-                    value={newDate}
-                    onChange={(e) => setNewDate(e.target.value)}
-                    className="w-full text-sm p-2 border rounded-lg bg-white text-gray-800 font-bold"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-500 mb-1">店舗名（選択）</label>
-                  <select 
-                    value={newStore}
-                    onChange={(e) => setNewStore(e.target.value)}
-                    className="w-full text-sm p-2 border rounded-lg bg-white text-gray-800 font-bold"
-                  >
-                    {STORE_LIST.map((storeName) => (
-                      <option key={storeName} value={storeName}>{storeName}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-500 mb-1">金額 (円)</label>
-                  <input 
-                    type="number"
-                    placeholder="例: 15000"
-                    value={newAmount}
-                    onChange={(e) => setNewAmount(e.target.value)}
-                    className="w-full text-sm p-2 border rounded-lg bg-white text-gray-800 font-bold"
-                    required
-                  />
-                </div>
-                <button 
-                  type="submit"
-                  className="w-full py-2.5 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition shadow-sm"
-                >
-                  追加する
-                </button>
-              </form>
+<form 
+  onSubmit={(e) => {
+    e.preventDefault();
+    if (!newAmount || !newDate) {
+      alert('日付と金額を正しく入力してください');
+      return;
+    }
+    handleAddPurchase(e);
+  }} 
+  className="bg-gray-50 p-3 rounded-xl border border-gray-200 space-y-3"
+>
+  <div className="text-xs font-bold text-gray-700">新規購入データの追加</div>
+  <div>
+    <label className="block text-[10px] font-bold text-gray-500 mb-1">日付</label>
+    <input 
+      type="date"
+      value={newDate}
+      onChange={(e) => setNewDate(e.target.value)}
+      className="w-full text-sm p-2 border rounded-lg bg-white text-gray-800 font-bold"
+      required
+    />
+  </div>
+  <div>
+    <label className="block text-[10px] font-bold text-gray-500 mb-1">店舗名（選択）</label>
+    <select 
+      value={newStore}
+      onChange={(e) => setNewStore(e.target.value)}
+      className="w-full text-sm p-2 border rounded-lg bg-white text-gray-800 font-bold"
+    >
+      {STORE_LIST.map((storeName) => (
+        <option key={storeName} value={storeName}>{storeName}</option>
+      ))}
+    </select>
+  </div>
+  <div>
+    <label className="block text-[10px] font-bold text-gray-500 mb-1">金額 (円)</label>
+    <input 
+      type="number"
+      placeholder="例: 15000"
+      value={newAmount}
+      onChange={(e) => setNewAmount(e.target.value)}
+      className="w-full text-sm p-2 border rounded-lg bg-white text-gray-800 font-bold"
+      required
+    />
+  </div>
+  <button 
+    type="submit"
+    className="w-full py-2.5 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 active:bg-indigo-800 transition shadow-sm cursor-pointer"
+  >
+    追加する
+  </button>
+</form>
 
               {/* 一覧表示エリア */}
               <div>
