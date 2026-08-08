@@ -3,6 +3,27 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import Link from 'next/link';
 
+// 指定された店舗リスト
+const STORE_LIST = [
+  'カパス',
+  '松尾',
+  'ロイヤル',
+  '電材センター',
+  'プロストック',
+  'コーナン',
+  '建デポ',
+  'ビバホーム',
+  'コメリ',
+];
+
+export type MaterialPurchase = {
+  id: number;
+  date: string;
+  store: string;
+  amount: number;
+  inserted_at: string;
+};
+
 export default function SummaryPage() {
   const [historyList, setHistoryList] = useState<any[]>([]);
   const [productMap, setProductMap] = useState<{ [barcode: string]: { name: string } }>({});
@@ -16,7 +37,14 @@ export default function SummaryPage() {
   // 出庫者別詳細モーダル用の状態
   const [selectedUserForDetail, setSelectedUserForDetail] = useState<string | null>(null);
 
-  // 1. データの全件取得（履歴＆製品マスタ）
+  // --- 材料購入に関する状態 ---
+  const [purchases, setPurchases] = useState<MaterialPurchase[]>([]);
+  const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
+  const [newDate, setNewDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [newStore, setNewStore] = useState<string>(STORE_LIST[0]);
+  const [newAmount, setNewAmount] = useState<string>('');
+
+  // 1. データの全件取得（履歴＆製品マスタ ＆ 購入データ）
   const fetchData = async () => {
     setLoading(true);
     
@@ -29,6 +57,15 @@ export default function SummaryPage() {
       });
     }
     setProductMap(map);
+
+    // 材料購入データ取得
+    const { data: purchaseData } = await supabase
+      .from('material_purchases')
+      .select('*')
+      .order('date', { ascending: false });
+    if (purchaseData) {
+      setPurchases(purchaseData);
+    }
 
     // 履歴を全件取得（ページング処理）
     let allHistory: any[] = [];
@@ -59,6 +96,64 @@ export default function SummaryPage() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // 材料購入データの再取得
+  const fetchPurchases = async () => {
+    const { data } = await supabase
+      .from('material_purchases')
+      .select('*')
+      .order('date', { ascending: false });
+    if (data) {
+      setPurchases(data);
+    }
+  };
+
+  // 材料購入の追加処理
+  const handleAddPurchase = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAmount) return;
+
+    const { error } = await supabase.from('material_purchases').insert([
+      {
+        date: newDate,
+        store: newStore,
+        amount: Number(newAmount),
+      },
+    ]);
+
+    if (error) {
+      console.error('Error adding purchase:', error);
+    } else {
+      setNewAmount('');
+      fetchPurchases();
+    }
+  };
+
+  // 材料購入の削除処理
+  const handleDeletePurchase = async (id: number) => {
+    const { error } = await supabase.from('material_purchases').delete().eq('id', id);
+    if (!error) {
+      fetchPurchases();
+    }
+  };
+
+  // 選択月における購入金額の合計計算（店舗フィルターにも連動）
+  const totalPurchaseAmount = useMemo(() => {
+    return purchases
+      .filter((item) => {
+        const itemMonthStr = item.date ? item.date.substring(0, 7) : '';
+        const matchMonth = !selectedMonth || itemMonthStr === selectedMonth;
+        if (!matchMonth) return false;
+
+        if (searchStore.trim() !== '') {
+          const matchStore = item.store && item.store.toLowerCase().includes(searchStore.trim().toLowerCase());
+          if (!matchStore) return false;
+        }
+
+        return true;
+      })
+      .reduce((sum, item) => sum + Number(item.amount), 0);
+  }, [purchases, selectedMonth, searchStore]);
 
   // 2. 日付から "YYYY-MM" を取得するヘルパー
   const getItemMonthStr = (createdAt: string) => {
@@ -142,11 +237,9 @@ export default function SummaryPage() {
 
     historyList
       .filter((item) => {
-        // 月フィルター
         const itemMonthStr = getItemMonthStr(item.created_at);
         if (selectedMonth && itemMonthStr !== selectedMonth) return false;
 
-        // 店舗フィルター
         if (searchStore.trim() !== '') {
           const matchStore = item.store_name && item.store_name.toLowerCase().includes(searchStore.trim().toLowerCase());
           if (!matchStore) return false;
@@ -213,7 +306,21 @@ export default function SummaryPage() {
         </div>
       </div>
 
-      {/* 出庫者別 合計金額カード（内訳の上に追加） */}
+      {/* --- 追加：購入材料の金額合計カード（タップで入力・一覧モーダルが開く） --- */}
+      <div 
+        onClick={() => setIsMaterialModalOpen(true)}
+        className="bg-indigo-900 text-white p-4 rounded-xl shadow-md mb-6 cursor-pointer hover:bg-indigo-800 transition"
+      >
+        <div className="text-xs font-bold mb-1 text-indigo-200 flex justify-between items-center">
+          <span>🛒 買った材料の金額の合計 ({selectedMonth || '全期間'})</span>
+          <span className="text-[10px] bg-indigo-700 px-2 py-0.5 rounded text-white">タップして入力・一覧</span>
+        </div>
+        <div className="text-2xl font-black text-green-400">
+          ¥{totalPurchaseAmount.toLocaleString()}
+        </div>
+      </div>
+
+      {/* 出庫者別 合計金額カード */}
       <div className="bg-gray-800 text-white p-4 rounded-xl shadow-md mb-6">
         <h2 className="text-sm font-bold mb-2 border-b border-gray-700 pb-1">
           👤 出庫者別 合計金額 ({selectedMonth || '全期間'})
@@ -297,6 +404,100 @@ export default function SummaryPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* --- 購入材料の入力・一覧モーダル --- */}
+      {isMaterialModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between px-4 py-3 bg-indigo-900 text-white font-bold text-sm">
+              <span>🛒 買った材料の入力・一覧</span>
+              <button 
+                type="button"
+                onClick={() => setIsMaterialModalOpen(false)}
+                className="text-white hover:bg-indigo-800 px-2 py-1 rounded text-xs"
+              >
+                ✕ 閉じる
+              </button>
+            </div>
+
+            <div className="p-4 overflow-y-auto flex-1 space-y-4">
+              {/* 入力フォーム */}
+              <form onSubmit={handleAddPurchase} className="bg-gray-50 p-3 rounded-xl border border-gray-200 space-y-3">
+                <div className="text-xs font-bold text-gray-700">新規購入データの追加</div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 mb-1">日付</label>
+                  <input 
+                    type="date"
+                    value={newDate}
+                    onChange={(e) => setNewDate(e.target.value)}
+                    className="w-full text-sm p-2 border rounded-lg bg-white text-gray-800 font-bold"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 mb-1">店舗名（選択）</label>
+                  <select 
+                    value={newStore}
+                    onChange={(e) => setNewStore(e.target.value)}
+                    className="w-full text-sm p-2 border rounded-lg bg-white text-gray-800 font-bold"
+                  >
+                    {STORE_LIST.map((storeName) => (
+                      <option key={storeName} value={storeName}>{storeName}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 mb-1">金額 (円)</label>
+                  <input 
+                    type="number"
+                    placeholder="例: 15000"
+                    value={newAmount}
+                    onChange={(e) => setNewAmount(e.target.value)}
+                    className="w-full text-sm p-2 border rounded-lg bg-white text-gray-800 font-bold"
+                    required
+                  />
+                </div>
+                <button 
+                  type="submit"
+                  className="w-full py-2.5 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition shadow-sm"
+                >
+                  追加する
+                </button>
+              </form>
+
+              {/* 一覧表示エリア */}
+              <div>
+                <div className="text-xs font-bold text-gray-700 mb-2 flex items-center justify-between">
+                  <span>購入履歴一覧 ({purchases.length}件)</span>
+                  <span className="text-indigo-600 font-black">合計: ¥{purchases.reduce((s, i) => s + Number(i.amount), 0).toLocaleString()}</span>
+                </div>
+                <div className="space-y-2">
+                  {purchases.map((item) => (
+                    <div key={item.id} className="flex items-center justify-between bg-white p-3 rounded-xl border border-gray-200 text-xs shadow-xs">
+                      <div className="space-y-0.5">
+                        <div className="text-[10px] text-gray-500 font-bold">{item.date} ／ 店舗: <span className="text-indigo-600">{item.store}</span></div>
+                        <div className="font-black text-gray-900 text-sm">¥{Number(item.amount).toLocaleString()}</div>
+                      </div>
+                      <button 
+                        type="button"
+                        onClick={() => handleDeletePurchase(item.id)}
+                        className="text-red-500 hover:text-red-700 text-xs font-bold px-2.5 py-1.5 bg-red-50 hover:bg-red-100 rounded-lg transition"
+                      >
+                        削除
+                      </button>
+                    </div>
+                  ))}
+                  {purchases.length === 0 && (
+                    <div className="text-center py-6 text-xs text-gray-400 border border-dashed border-gray-200 rounded-xl">
+                      購入履歴はありません
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </main>
