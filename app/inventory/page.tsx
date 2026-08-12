@@ -19,6 +19,7 @@ const STORES = [
   '建デポ',
   'ビバホーム',
   'コメリ',
+  '港屋',
 ];
 
 type InventoryItem = {
