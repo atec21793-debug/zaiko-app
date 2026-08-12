@@ -29,7 +29,7 @@ export default function OutboundPage() {
   const [productsList, setProductsList] = useState<Product[]>([]);
 
   const users = ['天野', '佐々木'];
-  const stores = ['カパス', '松尾', 'ロイヤル', '電材センター', 'プロストック', 'コーナン', '建デポ', 'ビバホーム', 'コメリ'];
+  const stores = ['カパス', '松尾', 'ロイヤル', '電材センター', 'プロストック', 'コーナン', '建デポ', 'ビバホーム', '港屋', 'コメリ'];
 
   // ページ読み込み時に材料マスタを全件取得
   useEffect(() => {

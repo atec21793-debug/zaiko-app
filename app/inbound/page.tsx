@@ -26,7 +26,7 @@ export default function InboundPage() {
   // 登録済み材料のリストを保持するステート
   const [productsList, setProductsList] = useState<Product[]>([]);
 
-  const stores = ['カパス', '松尾', 'ロイヤル', '電材センター', 'プロストック', 'コーナン', '建デポ', 'ビバホーム', 'コメリ'];
+  const stores = ['カパス', '松尾', 'ロイヤル', '電材センター', 'プロストック', 'コーナン', '建デポ', 'ビバホーム', '港屋', 'コメリ'];
 
   // ページ読み込み時に材料マスタを全件取得
   useEffect(() => {
