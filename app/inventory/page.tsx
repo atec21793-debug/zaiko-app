@@ -56,10 +56,30 @@ export default function InventoryPage() {
   const fetchInventory = async () => {
     setLoading(true);
     try {
+      // 1. 製品マスタ取得
       const { data: products, error: prodError } = await supabase.from('products').select('*');
       if (prodError) throw prodError;
-      const { data: inventoryData, error: invError } = await supabase.from('inventory').select('*');
-      if (invError) throw invError;
+
+      // 2. 履歴データを全件取得（ページング対応）
+      let allHistory: any[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let fetchMore = true;
+
+      while (fetchMore) {
+        const { data: histData, error } = await supabase
+          .from('history')
+          .select('*')
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        if (error || !histData || histData.length === 0) {
+          fetchMore = false;
+        } else {
+          allHistory = [...allHistory, ...histData];
+          if (histData.length < pageSize) fetchMore = false;
+          else page++;
+        }
+      }
 
       const map: { [barcode: string]: InventoryItem } = {};
 
@@ -90,12 +110,23 @@ export default function InventoryPage() {
         };
       });
 
-      inventoryData?.forEach((inv) => {
-        if (map[inv.barcode]) {
-          map[inv.barcode].store_quantities[inv.store_name] = inv.quantity;
+      // 3. 履歴データをもとに店舗ごとの在庫数を計算（入庫：＋、出庫：－）
+      allHistory.forEach((item) => {
+        const barcode = item.barcode;
+        const store = item.store_name;
+        const quantity = Number(item.quantity) || 0;
+        const type = item.type; // '入庫' または '出庫'
+
+        if (map[barcode] && store && STORES.includes(store)) {
+          if (type === '入庫') {
+            map[barcode].store_quantities[store] += quantity;
+          } else if (type === '出庫') {
+            map[barcode].store_quantities[store] -= quantity;
+          }
         }
       });
 
+      // 4. 総在庫数の計算
       Object.values(map).forEach((item) => {
         let total = 0;
         STORES.forEach((store) => { total += item.store_quantities[store] || 0; });
@@ -199,7 +230,6 @@ export default function InventoryPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
-        {/* ヘッダー部分：説明文を削除してスッキリ */}
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-bold text-gray-800">在庫一覧</h1>
           <Link 
@@ -211,7 +241,6 @@ export default function InventoryPage() {
         </div>
         <hr className="mb-6" />
 
-        {/* 検索バー */}
         <div className="mb-6">
           <input
             type="text"
