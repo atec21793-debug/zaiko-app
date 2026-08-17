@@ -14,6 +14,7 @@ const STORE_LIST = [
   '建デポ',
   'ビバホーム',
   'コメリ',
+  '港屋',
 ];
 
 export type MaterialPurchase = {
@@ -355,7 +356,7 @@ export default function SummaryPage() {
           <div className="flex justify-between items-center bg-gray-900/70 p-3 rounded-lg hover:bg-gray-700 transition">
             <div>
               <div className="text-xs font-bold text-gray-300 flex items-center gap-1.5">
-                <span>🛒 購入合計</span>
+                <span>購入合計</span>
                 
               </div>
               <div className="text-xl font-black text-green-400 mt-1">
@@ -434,7 +435,7 @@ export default function SummaryPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[85vh]">
             <div className="flex items-center justify-between px-4 py-3 bg-indigo-900 text-white font-bold text-sm">
-              <span>🛒 買った材料の入力・一覧</span>
+              <span>買った材料の入力・一覧</span>
               <button 
                 type="button"
                 onClick={() => setIsMaterialModalOpen(false)}
