@@ -17,6 +17,7 @@ export default function OutboundPage() {
   const [storeName, setStoreName] = useState('カパス');
   const [quantity, setQuantity] = useState<number | ''>(''); 
   const [unitPrice, setUnitPrice] = useState<number>(0);
+  const [currentInventory, setCurrentInventory] = useState<number | null>(null);
   
   // 今日の日付を YYYY-MM-DD 形式で取得（日本時間ベース）
   const todayJSTStr = new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Tokyo' }).replace(/\//g, '-');
@@ -25,13 +26,12 @@ export default function OutboundPage() {
   const [isScanning, setIsScanning] = useState(false);
   const scannedRef = useRef(false);
 
-  // 登録済み材料のリストを保持するステート
   const [productsList, setProductsList] = useState<Product[]>([]);
 
-  const users = ['天野', '佐々木'];
+  // 「在庫調整」という名前のユーザーを追加
+  const users = ['天野', '佐々木', '在庫調整'];
   const stores = ['カパス', '松尾', 'ロイヤル', '電材センター', 'プロストック', 'コーナン', '建デポ', 'ビバホーム', '港屋', 'コメリ', 'その他'];
 
-  // ページ読み込み時に材料マスタを全件取得
   useEffect(() => {
     fetchProducts();
   }, []);
@@ -43,11 +43,11 @@ export default function OutboundPage() {
     }
   };
 
-  // 商品名と単価を安全に自動取得する
   const fetchProductAndPrice = async (code: string, store: string) => {
     if (!code) {
       setProductName('');
       setUnitPrice(0);
+      setCurrentInventory(null);
       return;
     }
 
@@ -63,22 +63,32 @@ export default function OutboundPage() {
       setProductName('（未登録の材料・マスターで登録してください）');
     }
 
-    const { data: priceDataList, error: priceErr } = await supabase
+    const { data: priceDataList } = await supabase
       .from('unit_prices')
       .select('price')
       .eq('barcode', code)
       .eq('store_name', store)
-      .order('id', { ascending: false }) // データベースのIDが大きい（＝新しく追加された）順
+      .order('id', { ascending: false })
       .limit(1);
-
-    if (priceErr) {
-      console.error('❌ 単価取得エラー:', priceErr);
-    }
 
     if (priceDataList && priceDataList.length > 0 && priceDataList[0].price !== null) {
       setUnitPrice(Number(priceDataList[0].price));
     } else {
       setUnitPrice(0);
+    }
+
+    // 現在の在庫数取得
+    const { data: inv } = await supabase
+      .from('inventory')
+      .select('quantity')
+      .eq('barcode', code)
+      .eq('store_name', store)
+      .maybeSingle();
+
+    if (inv) {
+      setCurrentInventory(inv.quantity);
+    } else {
+      setCurrentInventory(0);
     }
   };
 
@@ -97,12 +107,12 @@ export default function OutboundPage() {
     setTimeout(() => { scannedRef.current = false; }, 500);
   };
 
-  // ドロップダウンで材料が選択されたときの処理
   const handleSelectProduct = (selectedBarcode: string) => {
     if (!selectedBarcode) {
       setBarcode('');
       setProductName('');
       setUnitPrice(0);
+      setCurrentInventory(null);
       return;
     }
     setBarcode(selectedBarcode);
@@ -112,55 +122,49 @@ export default function OutboundPage() {
     }
   };
 
-  // スリムダクトを除外しつつ、型番を条件に各カテゴリに商品を振り分ける
-    const categorizedProducts = useMemo(() => {
-      const validProducts = productsList.filter(p => !p.name.includes('スリムダクト'));
-  
-      const groups = {
-        head: [] as Product[],      // 頭（L頭は除く）
-        lHead: [] as Product[],     // L頭
-        duct: [] as Product[],     // ダクト（型番が LD- から始まるもの）
-        deg90: [] as Product[],    // 90（型番が LDK- から始まるもの）
-        deg45: [] as Product[],    // 45
-        joint: [] as Product[],    // ジョイント
-        others: [] as Product[],   // その他
-      };
-  
-      validProducts.forEach(p => {
-        const model = p.model_number || '';
-  
-        if (p.name.includes('L頭')) {
-          groups.lHead.push(p);
-        } else if (p.name.includes('頭')) {
-          groups.head.push(p);
-        } else if (model.startsWith('LD-70')) {
-          groups.duct.push(p);
-        } else if (model.startsWith('LDK-70')) {
-          groups.deg90.push(p);
-        } else if (p.name.includes('45')) {
-          groups.deg45.push(p);
-        } else if (model.startsWith('LDJ-70')) {
-          groups.joint.push(p);
-        } else {
-          groups.others.push(p);
-        }
-      });
-  
-      return groups;
-    }, [productsList]);
+  const categorizedProducts = useMemo(() => {
+    const validProducts = productsList.filter(p => !p.name.includes('スリムダクト'));
+    const groups = {
+      head: [] as Product[],
+      lHead: [] as Product[],
+      duct: [] as Product[],
+      deg90: [] as Product[],
+      deg45: [] as Product[],
+      joint: [] as Product[],
+      others: [] as Product[],
+    };
+
+    validProducts.forEach(p => {
+      const model = p.model_number || '';
+      if (p.name.includes('L頭')) {
+        groups.lHead.push(p);
+      } else if (p.name.includes('頭')) {
+        groups.head.push(p);
+      } else if (model.startsWith('LD-70')) {
+        groups.duct.push(p);
+      } else if (model.startsWith('LDK-70')) {
+        groups.deg90.push(p);
+      } else if (p.name.includes('45')) {
+        groups.deg45.push(p);
+      } else if (model.startsWith('LDJ-70')) {
+        groups.joint.push(p);
+      } else {
+        groups.others.push(p);
+      }
+    });
+
+    return groups;
+  }, [productsList]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const qtyNum = Number(quantity);
-    if (!barcode || quantity === '' || qtyNum <= 0) {
+    if (!barcode || quantity === '' || (selectedUser !== '在庫調整' && qtyNum <= 0)) {
       alert('バーコードと正しい数量を入力してください');
       return;
     }
 
     const currentUnitPrice = Number(unitPrice) || 0;
-    const totalAmount = qtyNum * currentUnitPrice;
-
-    // 選択された日付に現在の時刻（時分秒）を付与してISO文字列化する
     const customCreatedAt = new Date(`${outboundDate}T00:00:00+09:00`).toISOString();
 
     const { data: inv } = await supabase
@@ -171,17 +175,31 @@ export default function OutboundPage() {
       .maybeSingle();
 
     const currentQty = inv ? inv.quantity : 0;
-    const newQty = currentQty - qtyNum;
+    let newQty = 0;
+    let diffQty = 0;
+    let historyType = '出庫';
+
+    if (selectedUser === '在庫調整') {
+      newQty = qtyNum; // 入力された数値をそのまま実在庫数にする
+      diffQty = Math.abs(newQty - currentQty);
+      historyType = '在庫調整';
+    } else {
+      newQty = currentQty - qtyNum;
+      diffQty = qtyNum;
+      historyType = '出庫';
+    }
+
+    const totalAmount = diffQty * currentUnitPrice;
 
     const { error: histErr } = await supabase.from('history').insert({
       barcode,
       store_name: storeName,
       user_name: selectedUser,
-      type: '出庫',
-      quantity: qtyNum,
+      type: historyType,
+      quantity: diffQty,
       unit_price: currentUnitPrice,
       total_amount: totalAmount,
-      created_at: customCreatedAt, // 選択された日付を反映
+      created_at: customCreatedAt,
     });
 
     if (histErr) {
@@ -202,17 +220,20 @@ export default function OutboundPage() {
       });
     }
 
-    alert(`出庫完了しました (${productName} -${qtyNum})\n日付: ${outboundDate}\n単価: ¥{currentUnitPrice.toLocaleString()} / 合計: ¥{totalAmount.toLocaleString()}\n現在の在庫: ${newQty}`);
+    alert(`${historyType}完了しました (${productName})\n更新後の在庫: ${newQty}`);
     setBarcode('');
     setProductName('');
     setQuantity('');
     setUnitPrice(0);
+    setCurrentInventory(null);
   };
 
   return (
     <main className="w-full max-w-full min-h-screen p-4 bg-gray-50">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">出庫処理</h1>
+        <h1 className="text-2xl font-bold">
+          {selectedUser === '在庫調整' ? '在庫調整処理' : '出庫処理'}
+        </h1>
         <Link 
           href="/" 
           className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg shadow-sm font-bold text-sm transition"
@@ -221,6 +242,7 @@ export default function OutboundPage() {
         </Link>
       </div>
 
+      {/* 3つのボタン（天野、佐々木、在庫調整） */}
       <div className="flex bg-gray-200 p-1 rounded-xl mb-4">
         {users.map((user) => (
           <button
@@ -256,9 +278,8 @@ export default function OutboundPage() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* 出庫日選択 */}
         <div>
-          <label className="block text-xs font-bold text-gray-600 mb-1">出庫日</label>
+          <label className="block text-xs font-bold text-gray-600 mb-1">処理日</label>
           <input
             type="date"
             value={outboundDate}
@@ -273,13 +294,12 @@ export default function OutboundPage() {
           <select
             value={storeName}
             onChange={(e) => setStoreName(e.target.value)}
-            className="w-full p-3 border rounded-lg bg-white text-base"
+            className="w-full p-3 border rounded-lg bg-white text-base font-bold"
           >
             {stores.map((s) => (<option key={s} value={s}>{s}</option>))}
           </select>
         </div>
 
-        {/* 1つのドロップダウンに「頭」「ダクト」「45」「90」「ジョイント」等をグループ化 */}
         <div>
           <label className="block text-xs font-bold text-gray-600 mb-1">登録済み材料から選択</label>
           <select
@@ -288,74 +308,39 @@ export default function OutboundPage() {
             className="w-full p-3 border rounded-lg bg-white text-base font-bold text-gray-800"
           >
             <option value="">-- リストから選択またはバーコード入力 --</option>
-            
             {categorizedProducts.head.length > 0 && (
               <optgroup label="【頭】">
-                {categorizedProducts.head.map((p) => (
-                  <option key={p.barcode} value={p.barcode}>
-                    {p.name} {p.model_number ? `(${p.model_number})` : ''}
-                  </option>
-                ))}
+                {categorizedProducts.head.map((p) => (<option key={p.barcode} value={p.barcode}>{p.name} {p.model_number ? `(${p.model_number})` : ''}</option>))}
               </optgroup>
             )}
-
             {categorizedProducts.lHead.length > 0 && (
               <optgroup label="【L頭】">
-                {categorizedProducts.lHead.map((p) => (
-                  <option key={p.barcode} value={p.barcode}>
-                    {p.name} {p.model_number ? `(${p.model_number})` : ''}
-                  </option>
-                ))}
+                {categorizedProducts.lHead.map((p) => (<option key={p.barcode} value={p.barcode}>{p.name} {p.model_number ? `(${p.model_number})` : ''}</option>))}
               </optgroup>
             )}
-
             {categorizedProducts.duct.length > 0 && (
               <optgroup label="【ダクト】">
-                {categorizedProducts.duct.map((p) => (
-                  <option key={p.barcode} value={p.barcode}>
-                    {p.name} {p.model_number ? `(${p.model_number})` : ''}
-                  </option>
-                ))}
+                {categorizedProducts.duct.map((p) => (<option key={p.barcode} value={p.barcode}>{p.name} {p.model_number ? `(${p.model_number})` : ''}</option>))}
               </optgroup>
             )}
-
             {categorizedProducts.deg90.length > 0 && (
               <optgroup label="【90】">
-                {categorizedProducts.deg90.map((p) => (
-                  <option key={p.barcode} value={p.barcode}>
-                    {p.name} {p.model_number ? `(${p.model_number})` : ''}
-                  </option>
-                ))}
+                {categorizedProducts.deg90.map((p) => (<option key={p.barcode} value={p.barcode}>{p.name} {p.model_number ? `(${p.model_number})` : ''}</option>))}
               </optgroup>
             )}
-
             {categorizedProducts.deg45.length > 0 && (
               <optgroup label="【45】">
-                {categorizedProducts.deg45.map((p) => (
-                  <option key={p.barcode} value={p.barcode}>
-                    {p.name} {p.model_number ? `(${p.model_number})` : ''}
-                  </option>
-                ))}
+                {categorizedProducts.deg45.map((p) => (<option key={p.barcode} value={p.barcode}>{p.name} {p.model_number ? `(${p.model_number})` : ''}</option>))}
               </optgroup>
             )}
-
             {categorizedProducts.joint.length > 0 && (
               <optgroup label="【ジョイント】">
-                {categorizedProducts.joint.map((p) => (
-                  <option key={p.barcode} value={p.barcode}>
-                    {p.name} {p.model_number ? `(${p.model_number})` : ''}
-                  </option>
-                ))}
+                {categorizedProducts.joint.map((p) => (<option key={p.barcode} value={p.barcode}>{p.name} {p.model_number ? `(${p.model_number})` : ''}</option>))}
               </optgroup>
             )}
-
             {categorizedProducts.others.length > 0 && (
               <optgroup label="【その他】">
-                {categorizedProducts.others.map((p) => (
-                  <option key={p.barcode} value={p.barcode}>
-                    {p.name} {p.model_number ? `(${p.model_number})` : ''}
-                  </option>
-                ))}
+                {categorizedProducts.others.map((p) => (<option key={p.barcode} value={p.barcode}>{p.name} {p.model_number ? `(${p.model_number})` : ''}</option>))}
               </optgroup>
             )}
           </select>
@@ -372,10 +357,13 @@ export default function OutboundPage() {
             placeholder="バーコード入力"
           />
           <p className="text-xs font-bold text-gray-700 mt-1">{productName}</p>
+          {currentInventory !== null && (
+            <p className="text-xs font-bold text-blue-600 mt-0.5">現在の店舗在庫: {currentInventory} 個</p>
+          )}
         </div>
 
         <div>
-          <label className="block text-xs font-bold text-gray-600 mb-1">単価 (店舗別単価から自動取得・変更可)</label>
+          <label className="block text-xs font-bold text-gray-600 mb-1">単価</label>
           <input
             type="number"
             value={unitPrice}
@@ -387,20 +375,22 @@ export default function OutboundPage() {
         </div>
 
         <div>
-          <label className="block text-xs font-bold text-gray-600 mb-1">出庫数量</label>
+          <label className="block text-xs font-bold text-gray-600 mb-1">
+            {selectedUser === '在庫調整' ? '実在庫数（正しい数量に合わせる）' : '出庫数量'}
+          </label>
           <input
             type="number"
             value={quantity}
             onChange={(e) => setQuantity(e.target.value === '' ? '' : Number(e.target.value))}
-            min="1"
+            min={selectedUser === '在庫調整' ? "0" : "1"}
             required
-            placeholder="数量を入力"
-            className="w-full p-3 border rounded-lg text-base bg-white"
+            placeholder={selectedUser === '在庫調整' ? "実際の在庫数を入力" : "数量を入力"}
+            className="w-full p-3 border rounded-lg text-base bg-white font-bold"
           />
         </div>
 
         <button type="submit" className="w-full bg-gray-800 text-white p-5 rounded-xl font-bold text-lg shadow-lg mt-6">
-          出庫を確定する ({selectedUser})
+          {selectedUser === '在庫調整' ? '在庫調整を確定する' : `出庫を確定する (${selectedUser})`}
         </button>
       </form>
     </main>
