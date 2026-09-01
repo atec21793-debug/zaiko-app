@@ -36,7 +36,7 @@ export default function SummaryPage() {
   const [selectedMonth, setSelectedMonth] = useState(todayStr);
   const [searchStore, setSearchStore] = useState('');
 
-  // 出庫者・調整別詳細モーダル用の状態（「在庫調整」も含められるように）
+  // 出庫者・調整別詳細モーダル用の状態
   const [selectedUserForDetail, setSelectedUserForDetail] = useState<string | null>(null);
 
   // --- 材料購入に関する状態 ---
@@ -243,9 +243,9 @@ export default function SummaryPage() {
     return Object.values(materialMap);
   }, [historyList, selectedMonth, searchStore, selectedUserForDetail, productMap]);
 
-  // 5. 材料ごとに入庫数・出庫数を集計
+  // 5. 材料ごとに入庫数・出庫数・調整金額などを集計
   const summaryData = useMemo(() => {
-    const map: { [barcode: string]: { name: string; inQty: number; outQty: number; outAmount: number; adjustAmount: number } } = {};
+    const map: { [barcode: string]: { name: string; inQty: number; outQty: number; outAmount: number; adjustAmount: number; adjustQty: number } } = {};
 
     historyList
       .filter((item) => {
@@ -265,7 +265,7 @@ export default function SummaryPage() {
         const name = prodInfo ? prodInfo.name : `(未登録: ${barcode})`;
 
         if (!map[barcode]) {
-          map[barcode] = { name, inQty: 0, outQty: 0, outAmount: 0, adjustAmount: 0 };
+          map[barcode] = { name, inQty: 0, outQty: 0, outAmount: 0, adjustAmount: 0, adjustQty: 0 };
         }
 
         const amount = item.total_amount !== undefined && item.total_amount !== null
@@ -278,7 +278,7 @@ export default function SummaryPage() {
           map[barcode].outQty += item.quantity;
           map[barcode].outAmount += amount;
         } else if (item.type === '在庫調整') {
-          // 在庫調整の金額も別途集計や内訳に活かす場合
+          map[barcode].adjustQty += item.quantity;
           map[barcode].adjustAmount += amount;
         }
       });
@@ -415,7 +415,7 @@ export default function SummaryPage() {
           {summaryData.map((item) => (
             <div key={item.name} className="p-3 rounded-xl border shadow-sm bg-white flex flex-col gap-2">
               <div className="font-bold text-base text-gray-800">{item.name}</div>
-              <div className="grid grid-cols-3 gap-2 bg-gray-50 p-2 rounded-lg text-center text-xs">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-gray-50 p-2 rounded-lg text-center text-xs">
                 <div>
                   <span className="block text-gray-500 font-bold">入庫数</span>
                   <span className="text-gray-800 font-black text-sm">+{item.inQty} 個</span>
@@ -427,6 +427,10 @@ export default function SummaryPage() {
                 <div>
                   <span className="block text-gray-500 font-bold">出庫金額</span>
                   <span className="text-gray-800 font-black text-sm">¥{item.outAmount.toLocaleString()}</span>
+                </div>
+                <div>
+                  <span className="block text-orange-600 font-bold">調整分金額</span>
+                  <span className="text-orange-700 font-black text-sm">¥{item.adjustAmount.toLocaleString()}</span>
                 </div>
               </div>
             </div>
