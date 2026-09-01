@@ -112,40 +112,42 @@ export default function OutboundPage() {
     }
   };
 
-  // スリムダクトを除外しつつ、各カテゴリに商品を振り分ける
-  const categorizedProducts = useMemo(() => {
-    const validProducts = productsList.filter(p => !p.name.includes('スリムダクト'));
-
-    const groups = {
-      head: [] as Product[],      // 頭（L頭は除く）
-      lHead: [] as Product[],     // L頭
-      duct: [] as Product[],     // ダクト
-      deg90: [] as Product[],    // 90
-      deg45: [] as Product[],    // 45
-      joint: [] as Product[],    // ジョイント
-      others: [] as Product[],   // その他
-    };
-
-    validProducts.forEach(p => {
-      if (p.name.includes('L頭')) {
-        groups.lHead.push(p);
-      } else if (p.name.includes('頭')) {
-        groups.head.push(p);
-      } else if (p.name.includes('ダクト')) {
-        groups.duct.push(p);
-      } else if (p.name.includes('90')) {
-        groups.deg90.push(p);
-      } else if (p.name.includes('45')) {
-        groups.deg45.push(p);
-      } else if (p.name.includes('ジョイント')) {
-        groups.joint.push(p);
-      } else {
-        groups.others.push(p);
-      }
-    });
-
-    return groups;
-  }, [productsList]);
+  // スリムダクトを除外しつつ、型番を条件に各カテゴリに商品を振り分ける
+    const categorizedProducts = useMemo(() => {
+      const validProducts = productsList.filter(p => !p.name.includes('スリムダクト'));
+  
+      const groups = {
+        head: [] as Product[],      // 頭（L頭は除く）
+        lHead: [] as Product[],     // L頭
+        duct: [] as Product[],     // ダクト（型番が LD- から始まるもの）
+        deg90: [] as Product[],    // 90（型番が LDK- から始まるもの）
+        deg45: [] as Product[],    // 45
+        joint: [] as Product[],    // ジョイント
+        others: [] as Product[],   // その他
+      };
+  
+      validProducts.forEach(p => {
+        const model = p.model_number || '';
+  
+        if (p.name.includes('L頭')) {
+          groups.lHead.push(p);
+        } else if (p.name.includes('頭')) {
+          groups.head.push(p);
+        } else if (model.startsWith('LD-70')) {
+          groups.duct.push(p);
+        } else if (model.startsWith('LDK-70')) {
+          groups.deg90.push(p);
+        } else if (p.name.includes('45')) {
+          groups.deg45.push(p);
+        } else if (model.startsWith('LDJ-70')) {
+          groups.joint.push(p);
+        } else {
+          groups.others.push(p);
+        }
+      });
+  
+      return groups;
+    }, [productsList]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
