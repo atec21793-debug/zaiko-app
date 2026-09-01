@@ -103,7 +103,7 @@ export default function InboundPage() {
         groups.deg90.push(p);
       } else if (p.name.includes('45')) {
         groups.deg45.push(p);
-      } else if (p.name.includes('ジョイント')) {
+      } else if (model.startsWith('LDJ-70')) {
         groups.joint.push(p);
       } else {
         groups.others.push(p);
