@@ -15,6 +15,7 @@ const STORE_LIST = [
   'ビバホーム',
   'コメリ',
   '港屋',
+  'その他',
 ];
 
 export type MaterialPurchase = {
