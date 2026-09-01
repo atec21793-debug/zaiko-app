@@ -21,7 +21,7 @@ export default function ManagePage() {
   const [batchFilteredProducts, setBatchFilteredProducts] = useState<any[]>([]);
   const [commonStorePrices, setCommonStorePrices] = useState<{ [key: string]: string }>({});
 
-  // 選択肢の定義（「頭」選択時に「L頭」が巻き込まれないよう調整など）
+  // 選択肢の定義
   const batchCategories = [
     { label: '頭', keywords: ['頭'] },
     { label: 'ダクト', keywords: ['ダクト'] },
@@ -29,6 +29,16 @@ export default function ManagePage() {
     { label: '45', keywords: ['45'] },
     { label: 'ジョイント', keywords: ['ジョイント'] },
     { label: 'L頭', keywords: ['L頭'] },
+    { label: '90頭', keywords: ['90頭'] },
+    { label: '90ダクト', keywords: ['90ダクト'] },
+    { label: '9090', keywords: ['9090'] },
+    { label: '9045', keywords: ['9045'] },
+    { label: '90ジョイント', keywords: ['90ジョイント'] },
+    { label: '77頭', keywords: ['77頭'] },
+    { label: '77ダクト', keywords: ['77ダクト'] },
+    { label: '7790', keywords: ['7790'] },
+    { label: '7745', keywords: ['7745'] },
+    { label: '77ジョイント', keywords: ['77ジョイント'] },
   ];
 
   const stores = ['カパス', '松尾', 'ロイヤル', '電材センター', 'プロストック', 'コーナン', '建デポ', 'ビバホーム', '港屋','コメリ', 'その他'];
@@ -42,7 +52,7 @@ export default function ManagePage() {
     fetchProducts();
   }, []);
 
-  // 選択されたカテゴリに応じて商品を抽出しつつ、「スリムダクト」を省く
+  // 選択されたカテゴリに応じて商品を抽出しつつ除外条件を適用
   useEffect(() => {
     const category = batchCategories.find(c => c.label === selectedKeyword);
     if (!category) {
@@ -54,10 +64,17 @@ export default function ManagePage() {
       // 名前に「スリムダクト」が含まれる場合は除外
       if (p.name.includes('スリムダクト')) return false;
 
-      // 「頭」の場合は「L頭」を混入させないための厳密なチェック（必要に応じて調整）
+      // 「頭」の場合は「L頭」を混入させない
       if (selectedKeyword === '頭') {
-        // 「L頭」を含まず、かつ「頭」を含むもの
         return p.name.includes('頭') && !p.name.includes('L頭');
+      }
+
+      // 「90」の場合は「立面90」などを除外する
+      if (selectedKeyword === '90') {
+        if (p.name.includes('立面90') || p.name.includes('自在90') || p.name.includes('曲り90')) {
+          return false;
+        }
+        return p.name.includes('90');
       }
 
       return category.keywords.some(keyword => p.name.includes(keyword));
