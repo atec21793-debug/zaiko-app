@@ -16,7 +16,7 @@ export default function HistoryPage() {
   const todayStr = new Date().toISOString().substring(0, 7);
   const [selectedMonth, setSelectedMonth] = useState(todayStr); 
 
-  const [activeTab, setActiveTab] = useState<'all' | '出庫' | '入庫'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | '出庫' | '入庫' | '在庫調整'>('all');
   const [searchStore, setSearchStore] = useState('');
   const [searchMaterial, setSearchMaterial] = useState('');
 
@@ -44,7 +44,7 @@ export default function HistoryPage() {
     }
     setProductMap(map);
 
-    // 2. 店舗一覧取得（inventory や unit_prices から店舗一覧を作成）
+    // 2. 店舗一覧取得
     const { data: invData } = await supabase.from('inventory').select('store_name');
     const { data: priceData } = await supabase.from('unit_prices').select('store_name');
     
@@ -83,7 +83,7 @@ export default function HistoryPage() {
   const handleDelete = async (item: any) => {
     const prodInfo = productMap[item.barcode];
     const itemName = prodInfo ? prodInfo.name : item.barcode;
-    if (!confirm(`この履歴（${item.type}: ${itemName} 数量:${item.quantity}）を取り消しますか？\n在庫数も自動で元に戻ります。`)) {
+    if (!confirm(`この履歴（${item.type}: ${itemName} 数量:${item.quantity}）を取り消しますか？\n（※在庫調整の取り消し時は在庫数は自動に戻りません。必要に応じて手動で調整してください）`)) {
       return;
     }
 
@@ -93,34 +93,34 @@ export default function HistoryPage() {
       return;
     }
 
-    const { data: inv } = await supabase
-      .from('inventory')
-      .select('*')
-      .eq('barcode', item.barcode)
-      .eq('store_name', item.store_name)
-      .single();
-
-    if (inv) {
-      const adjustment = item.type === '入庫' ? -item.quantity : item.quantity;
-      const newQty = inv.quantity + adjustment;
-      await supabase
+    if (item.type !== '在庫調整') {
+      const { data: inv } = await supabase
         .from('inventory')
-        .update({ quantity: newQty })
-        .eq('id', inv.id);
+        .select('*')
+        .eq('barcode', item.barcode)
+        .eq('store_name', item.store_name)
+        .single();
+
+      if (inv) {
+        const adjustment = item.type === '入庫' ? -item.quantity : item.quantity;
+        const newQty = inv.quantity + adjustment;
+        await supabase
+          .from('inventory')
+          .update({ quantity: newQty })
+          .eq('id', inv.id);
+      }
     }
 
     alert('取り消し処理が完了しました。');
     fetchData(true);
   };
 
-  // 店舗を変更したときに unit_prices テーブルから該当店舗・商品の単価を取得
   const handleStoreChangeForEdit = async (barcode: string, newStore: string) => {
     setEditStoreName(newStore);
     if (!barcode || !newStore) return;
 
     let resolvedPrice = 0;
 
-    // unit_prices テーブルから指定バーコード＆指定店舗の単価を取得
     const { data: priceData } = await supabase
       .from('unit_prices')
       .select('price')
@@ -131,7 +131,6 @@ export default function HistoryPage() {
     if (priceData && priceData.price !== null && priceData.price !== undefined) {
       resolvedPrice = Number(priceData.price);
     } else {
-      // 見つからない場合は製品マスタの標準単価を確認（なければ0）
       const prodInfo = productMap[barcode];
       if (prodInfo && prodInfo.unit_price !== undefined && prodInfo.unit_price !== null) {
         resolvedPrice = Number(prodInfo.unit_price);
@@ -150,8 +149,8 @@ export default function HistoryPage() {
       alert('正しい単価を入力してください');
       return;
     }
-    if (isNaN(newQuantity) || newQuantity <= 0) {
-      alert('数量は1以上を入力してください');
+    if (isNaN(newQuantity) || (item.type !== '在庫調整' && newQuantity <= 0)) {
+      alert('正しい数量を入力してください');
       return;
     }
     if (!newStore) {
@@ -272,7 +271,7 @@ export default function HistoryPage() {
         </div>
       </div>
 
-      <div className="flex rounded-xl bg-gray-200 p-1 mb-4 font-bold text-sm">
+      <div className="flex rounded-xl bg-gray-200 p-1 mb-4 font-bold text-xs gap-1">
         <button
           type="button"
           onClick={() => setActiveTab('all')}
@@ -289,7 +288,7 @@ export default function HistoryPage() {
             activeTab === '出庫' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'
           }`}
         >
-          出庫のみ
+          出庫
         </button>
         <button
           type="button"
@@ -298,11 +297,20 @@ export default function HistoryPage() {
             activeTab === '入庫' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'
           }`}
         >
-          入庫のみ
+          入庫
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('在庫調整')}
+          className={`flex-1 py-2 rounded-lg transition ${
+            activeTab === '在庫調整' ? 'bg-white text-orange-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          調整
         </button>
       </div>
 
-      <h2 className="font-bold text-base mb-3">入出庫履歴 ({filteredHistory.length}件)</h2>
+      <h2 className="font-bold text-base mb-3">履歴一覧 ({filteredHistory.length}件)</h2>
       {loading ? (
         <p className="text-center text-gray-500 py-8">読み込み中...</p>
       ) : filteredHistory.length === 0 ? (
@@ -317,19 +325,23 @@ export default function HistoryPage() {
             const totalAmount = item.total_amount !== undefined && item.total_amount !== null ? Number(item.total_amount) : (unitPrice * item.quantity);
             const isEditing = editingId === item.id;
 
+            const borderClass = 
+              item.type === '入庫' ? 'border-l-4 border-l-blue-500' : 
+              item.type === '出庫' ? 'border-l-4 border-l-green-500' : 'border-l-4 border-l-orange-500';
+
+            const badgeClass = 
+              item.type === '入庫' ? 'bg-blue-100 text-blue-800' : 
+              item.type === '出庫' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800';
+
             return (
               <div 
                 key={item.id} 
-                className={`p-3 rounded-xl border shadow-sm bg-white flex flex-col gap-1 text-sm ${
-                  item.type === '入庫' ? 'border-l-4 border-l-blue-500' : 'border-l-4 border-l-green-500'
-                }`}
+                className={`p-3 rounded-xl border shadow-sm bg-white flex flex-col gap-1 text-sm ${borderClass}`}
               >
                 <div className="flex justify-between items-center text-xs text-gray-500">
                   <span>{new Date(item.created_at).toLocaleString('ja-JP')}</span>
                   <div className="flex items-center gap-2">
-                    <span className={`px-2 py-0.5 rounded font-bold text-xs ${
-                      item.type === '入庫' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
-                    }`}>
+                    <span className={`px-2 py-0.5 rounded font-bold text-xs ${badgeClass}`}>
                       {item.type}
                     </span>
                     <button
@@ -386,7 +398,7 @@ export default function HistoryPage() {
                           value={editQuantity}
                           onChange={(e) => setEditQuantity(Number(e.target.value))}
                           className="w-full p-1.5 border rounded text-xs bg-white font-bold"
-                          min="1"
+                          min="0"
                         />
                       </div>
                       <div>
@@ -408,7 +420,7 @@ export default function HistoryPage() {
 
                     {item.type === '出庫' && (
                       <div>
-                        <label className="block text-[10px] font-bold text-gray-600 mb-0.5">単価（店舗変更で自動反映）</label>
+                        <label className="block text-[10px] font-bold text-gray-600 mb-0.5">単価</label>
                         <input
                           type="number"
                           value={editUnitPrice}
@@ -416,9 +428,6 @@ export default function HistoryPage() {
                           className="w-full p-1.5 border rounded text-xs bg-white font-bold text-green-700"
                           min="0"
                         />
-                        <div className="mt-1 text-[11px] font-bold text-gray-600">
-                          反映される金額: ¥{(editUnitPrice * editQuantity).toLocaleString()}
-                        </div>
                       </div>
                     )}
 
