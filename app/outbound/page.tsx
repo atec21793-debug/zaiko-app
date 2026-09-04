@@ -135,6 +135,7 @@ export default function OutboundPage() {
 
     productsList.forEach(p => {
       const model = p.model_number || '';
+      // 「スリムダクト」などはダクトのグループに混ぜず、モデル番号や名前に応じて適切に振り分ける（または「その他」へ）
       if (p.name.includes('L頭')) {
         groups.lHead.push(p);
       } else if (p.name.includes('頭')) {
@@ -180,7 +181,7 @@ export default function OutboundPage() {
 
     if (selectedUser === '在庫調整') {
       newQty = currentQty + qtyNum;
-      diffQty = qtyNum; // ★ 符号付き（プラス・マイナス）のまま保存する
+      diffQty = Math.abs(qtyNum);
       historyType = '在庫調整';
     } else {
       newQty = currentQty - qtyNum;
@@ -219,7 +220,7 @@ export default function OutboundPage() {
       });
     }
 
-    alert(`${historyType}完了しました (${productName})\n更新后的在庫: ${newQty}`);
+    alert(`${historyType}完了しました (${productName})\n更新後の在庫: ${newQty}`);
     setBarcode('');
     setProductName('');
     setQuantity('');
@@ -241,6 +242,7 @@ export default function OutboundPage() {
         </Link>
       </div>
 
+      {/* 3つのボタン（天野、佐々木、在庫調整） */}
       <div className="flex bg-gray-200 p-1 rounded-xl mb-4">
         {users.map((user) => (
           <button
