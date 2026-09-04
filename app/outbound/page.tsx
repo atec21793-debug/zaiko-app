@@ -123,7 +123,6 @@ export default function OutboundPage() {
   };
 
   const categorizedProducts = useMemo(() => {
-    const validProducts = productsList.filter(p => !p.name.includes('スリムダクト'));
     const groups = {
       head: [] as Product[],
       lHead: [] as Product[],
@@ -134,13 +133,14 @@ export default function OutboundPage() {
       others: [] as Product[],
     };
 
-    validProducts.forEach(p => {
+    productsList.forEach(p => {
       const model = p.model_number || '';
+      // 「スリムダクト」などはダクトのグループに混ぜず、モデル番号や名前に応じて適切に振り分ける（または「その他」へ）
       if (p.name.includes('L頭')) {
         groups.lHead.push(p);
       } else if (p.name.includes('頭')) {
         groups.head.push(p);
-      } else if (model.startsWith('LD-70')) {
+      } else if (model.startsWith('LD-70') && !p.name.includes('スリムダクト')) {
         groups.duct.push(p);
       } else if (model.startsWith('LDK-70')) {
         groups.deg90.push(p);
@@ -180,12 +180,10 @@ export default function OutboundPage() {
     let historyType = '出庫';
 
     if (selectedUser === '在庫調整') {
-      // 在庫調整の場合：入力された増減数（プラスまたはマイナス）をそのまま足し引きする
       newQty = currentQty + qtyNum;
-      diffQty = Math.abs(qtyNum); // 金額計算用には絶対値を使用
+      diffQty = Math.abs(qtyNum);
       historyType = '在庫調整';
     } else {
-      // 通常出庫の場合：入力された数量分を引く
       newQty = currentQty - qtyNum;
       diffQty = qtyNum;
       historyType = '出庫';
