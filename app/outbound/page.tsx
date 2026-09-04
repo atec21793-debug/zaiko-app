@@ -159,8 +159,8 @@ export default function OutboundPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const qtyNum = Number(quantity);
-    if (!barcode || quantity === '' || (selectedUser !== '在庫調整' && qtyNum <= 0)) {
-      alert('バーコードと正しい数量を入力してください');
+    if (!barcode || quantity === '' || qtyNum === 0) {
+      alert('バーコードと、0以外の増減数を入力してください');
       return;
     }
 
@@ -180,10 +180,12 @@ export default function OutboundPage() {
     let historyType = '出庫';
 
     if (selectedUser === '在庫調整') {
-      newQty = qtyNum; // 入力された数値をそのまま実在庫数にする
-      diffQty = Math.abs(newQty - currentQty);
+      // 在庫調整の場合：入力された増減数（プラスまたはマイナス）をそのまま足し引きする
+      newQty = currentQty + qtyNum;
+      diffQty = Math.abs(qtyNum); // 金額計算用には絶対値を使用
       historyType = '在庫調整';
     } else {
+      // 通常出庫の場合：入力された数量分を引く
       newQty = currentQty - qtyNum;
       diffQty = qtyNum;
       historyType = '出庫';
@@ -376,15 +378,14 @@ export default function OutboundPage() {
 
         <div>
           <label className="block text-xs font-bold text-gray-600 mb-1">
-            {selectedUser === '在庫調整' ? '実在庫数（正しい数量に合わせる）' : '出庫数量'}
+            {selectedUser === '在庫調整' ? '増減数（例: +2 や -1）' : '出庫数量'}
           </label>
           <input
             type="number"
             value={quantity}
             onChange={(e) => setQuantity(e.target.value === '' ? '' : Number(e.target.value))}
-            min={selectedUser === '在庫調整' ? "0" : "1"}
             required
-            placeholder={selectedUser === '在庫調整' ? "実際の在庫数を入力" : "数量を入力"}
+            placeholder={selectedUser === '在庫調整' ? "増やす場合は 2、減らす場合は -1" : "数量を入力"}
             className="w-full p-3 border rounded-lg text-base bg-white font-bold"
           />
         </div>

@@ -36,8 +36,11 @@ export default function SummaryPage() {
   const [selectedMonth, setSelectedMonth] = useState(todayStr);
   const [searchStore, setSearchStore] = useState('');
 
-  // 出庫者・調整別詳細モーダル用の状態
+  // 出庫者別詳細モーダル用の状態
   const [selectedUserForDetail, setSelectedUserForDetail] = useState<string | null>(null);
+
+  // --- 在庫調整表示切替用の状態 ---
+  const [showAdjustments, setShowAdjustments] = useState(false);
 
   // --- 材料購入に関する状態 ---
   const [purchases, setPurchases] = useState<MaterialPurchase[]>([]);
@@ -177,7 +180,7 @@ export default function SummaryPage() {
     }
   };
 
-  // 3. 出庫者別 および 「在庫調整」別の合計金額の計算（店舗フィルター連動）
+  // 3. 出庫者別の合計金額の計算（店舗フィルター連動 ※「出庫」のみ対象）
   const userSummary = useMemo(() => {
     const summary: { [key: string]: number } = {};
     historyList
@@ -186,8 +189,8 @@ export default function SummaryPage() {
         const matchMonth = !selectedMonth || itemMonthStr === selectedMonth;
         if (!matchMonth) return false;
         
-        // 「出庫」または「在庫調整」を対象に含める
-        if ((item.type !== '出庫' && item.type !== '在庫調整') || !item.user_name || item.user_name === '-') return false;
+        // 「出庫」のみを対象にする
+        if (item.type !== '出庫' || !item.user_name || item.user_name === '-') return false;
 
         if (searchStore.trim() !== '') {
           const matchStore = item.store_name && item.store_name.toLowerCase().includes(searchStore.trim().toLowerCase());
@@ -206,7 +209,43 @@ export default function SummaryPage() {
     return summary;
   }, [historyList, selectedMonth, searchStore]);
 
-  // 4. 選択された出庫者・在庫調整の内訳計算
+  // 4. 在庫調整データの集計（ボタン押下時用）
+  const adjustmentSummaryData = useMemo(() => {
+    const materialMap: { [name: string]: { name: string; quantity: number; totalAmount: number; type: string } } = {};
+
+    historyList
+      .filter((item) => {
+        const itemMonthStr = getItemMonthStr(item.created_at);
+        const matchMonth = !selectedMonth || itemMonthStr === selectedMonth;
+        if (!matchMonth) return false;
+        if (item.type !== '在庫調整') return false;
+
+        if (searchStore.trim() !== '') {
+          const matchStore = item.store_name && item.store_name.toLowerCase().includes(searchStore.trim().toLowerCase());
+          if (!matchStore) return false;
+        }
+
+        return true;
+      })
+      .forEach((item) => {
+        const prodInfo = productMap[item.barcode];
+        const name = prodInfo ? prodInfo.name : `(未登録: ${item.barcode})`;
+        const amount = item.total_amount !== undefined && item.total_amount !== null 
+          ? Number(item.total_amount) 
+          : (Number(item.unit_price || 0) * item.quantity);
+
+        const key = `${name}_${item.user_name || '調整'}`;
+        if (!materialMap[key]) {
+          materialMap[key] = { name, quantity: 0, totalAmount: 0, type: item.user_name || '在庫調整' };
+        }
+        materialMap[key].quantity += item.quantity;
+        materialMap[key].totalAmount += amount;
+      });
+
+    return Object.values(materialMap);
+  }, [historyList, selectedMonth, searchStore, productMap]);
+
+  // 5. 選択された出庫者の内訳計算
   const selectedUserMaterials = useMemo(() => {
     if (!selectedUserForDetail) return [];
     const materialMap: { [name: string]: { name: string; quantity: number; totalAmount: number; type: string } } = {};
@@ -216,7 +255,7 @@ export default function SummaryPage() {
         const itemMonthStr = getItemMonthStr(item.created_at);
         const matchMonth = !selectedMonth || itemMonthStr === selectedMonth;
         if (!matchMonth) return false;
-        if ((item.type !== '出庫' && item.type !== '在庫調整') || item.user_name !== selectedUserForDetail) return false;
+        if (item.type !== '出庫' || item.user_name !== selectedUserForDetail) return false;
 
         if (searchStore.trim() !== '') {
           const matchStore = item.store_name && item.store_name.toLowerCase().includes(searchStore.trim().toLowerCase());
@@ -243,7 +282,7 @@ export default function SummaryPage() {
     return Object.values(materialMap);
   }, [historyList, selectedMonth, searchStore, selectedUserForDetail, productMap]);
 
-  // 5. 材料ごとに入庫数・出庫数・調整金額などを集計
+  // 6. 材料ごとに入庫数・出庫数・調整金額などを集計
   const summaryData = useMemo(() => {
     const map: { [barcode: string]: { name: string; inQty: number; outQty: number; outAmount: number; adjustAmount: number; adjustQty: number } } = {};
 
@@ -322,12 +361,22 @@ export default function SummaryPage() {
         </div>
       </div>
 
-      {/* --- 出庫者・在庫調整別 合計金額カード --- */}
+      {/* --- 担当別 合計金額カード --- */}
       <div className="bg-gray-800 text-white p-4 rounded-xl shadow-md mb-6 space-y-4">
         <div>
-          <h2 className="text-sm font-bold mb-2 border-b border-gray-700 pb-1">
-            👤 担当・調整別 合計金額 ({selectedMonth || '全期間'})
-          </h2>
+          <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-1">
+            <h2 className="text-sm font-bold">
+              👤 担当別 合計金額 ({selectedMonth || '全期間'})
+            </h2>
+            <button
+              type="button"
+              onClick={() => setShowAdjustments(!showAdjustments)}
+              className="text-[11px] bg-gray-700 hover:bg-gray-600 text-gray-200 px-2 py-1 rounded transition font-bold"
+            >
+              {showAdjustments ? '在庫調整を隠す' : '⚙️ 在庫調整の内訳を見る'}
+            </button>
+          </div>
+
           {Object.keys(userSummary).length === 0 ? (
             <p className="text-xs text-gray-400 py-2">この条件に該当するデータはありません</p>
           ) : (
@@ -349,6 +398,31 @@ export default function SummaryPage() {
             </div>
           )}
         </div>
+
+        {/* 在庫調整表示エリア（ボタンで開閉） */}
+        {showAdjustments && (
+          <div className="bg-gray-900/80 border border-gray-700 p-3 rounded-lg space-y-2 mt-3">
+            <div className="text-xs font-bold text-orange-400 flex justify-between items-center">
+              <span>🔧 在庫調整の内訳</span>
+              <span>合計: ¥{adjustmentSummaryData.reduce((s, i) => s + i.totalAmount, 0).toLocaleString()}</span>
+            </div>
+            {adjustmentSummaryData.length === 0 ? (
+              <p className="text-xs text-gray-400">この期間の在庫調整データはありません</p>
+            ) : (
+              <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                {adjustmentSummaryData.map((m) => (
+                  <div key={`${m.name}-${m.type}`} className="bg-gray-800 p-2 rounded border border-gray-700 text-xs flex justify-between items-center">
+                    <div>
+                      <span className="font-bold text-gray-200">{m.name}</span>
+                      <span className="ml-2 text-[10px] bg-gray-700 text-gray-300 px-1.5 py-0.5 rounded font-bold">{m.type}</span>
+                    </div>
+                    <span className="font-bold text-gray-300">数量: {m.quantity}個 (¥{m.totalAmount.toLocaleString()})</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* 購入合計 */}
         <div 
