@@ -111,24 +111,28 @@ export default function InventoryPage() {
         };
       });
 
-      // 3. 履歴データをもとに店舗ごとの在庫数を計算
-allHistory.forEach((item) => {
-  const barcode = item.barcode;
-  const store = item.store_name;
-  const quantity = Number(item.quantity) || 0;
-  const type = item.type; // '入庫', '出庫', または '在庫調整'
+      // 3. 履歴データを古い順にソートして店舗ごとの在庫数を計算
+      const sortedHistory = [...allHistory].sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
 
-  if (map[barcode] && store && STORES.includes(store)) {
-    if (type === '入庫') {
-      map[barcode].store_quantities[store] += quantity;
-    } else if (type === '出庫') {
-      map[barcode].store_quantities[store] -= quantity;
-    } else if (type === '在庫調整') {
-      // 在庫調整の場合は、履歴に記録された数量をその店舗の最終在庫数として上書き設定する
-      map[barcode].store_quantities[store] = quantity;
-    }
-  }
-});
+      sortedHistory.forEach((item) => {
+        const barcode = item.barcode;
+        const store = item.store_name;
+        const quantity = Number(item.quantity) || 0;
+        const type = item.type; // '入庫', '出庫', または '在庫調整'
+
+        if (map[barcode] && store && STORES.includes(store)) {
+          if (type === '入庫') {
+            map[barcode].store_quantities[store] += quantity;
+          } else if (type === '出庫') {
+            map[barcode].store_quantities[store] -= quantity;
+          } else if (type === '在庫調整') {
+            // 在庫調整の場合は、その時点の実在庫として数値を上書き設定する
+            map[barcode].store_quantities[store] = quantity;
+          }
+        }
+      });
 
       // 4. 総在庫数の計算
       Object.values(map).forEach((item) => {
