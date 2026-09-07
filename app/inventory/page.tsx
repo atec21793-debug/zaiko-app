@@ -52,6 +52,29 @@ export default function InventoryPage() {
 
   useEffect(() => {
     fetchInventory();
+
+    // データベース（history, products）の変更をリアルタイムで監視
+    const channel = supabase
+      .channel('db-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'history' },
+        () => {
+          fetchInventory();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'products' },
+        () => {
+          fetchInventory();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const fetchInventory = async () => {
