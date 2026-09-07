@@ -50,7 +50,7 @@ export default function InventoryPage() {
   
   const [expandedItems, setExpandedItems] = useState<{ [key: string]: boolean }>({});
 
-  // 在庫調整用モーダル・入力の状態
+  // 在庫調整用モーダル・入力の状態（現在庫 `currentQty` も一緒に保持するように型とstateを拡張）
   const [adjustTarget, setAdjustTarget] = useState<{ barcode: string; storeName: string; currentQty: number; itemName: string } | null>(null);
   const [newQuantityInput, setNewQuantityInput] = useState<string>('');
 
@@ -151,7 +151,8 @@ export default function InventoryPage() {
           } else if (type === '出庫') {
             map[barcode].store_quantities[store] -= quantity;
           } else if (type === '在庫調整') {
-            map[barcode].store_quantities[store] = quantity;
+            // 在庫調整も履歴の数量（増減分）を加算・反映
+            map[barcode].store_quantities[store] += quantity;
           }
         }
       });
@@ -206,12 +207,21 @@ export default function InventoryPage() {
       item.model_number.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-  // 在庫調整の実行
+  // 在庫調整の実行（実在庫数と現在庫の「差分」を計算して履歴に登録）
   const handleExecuteAdjustment = async () => {
     if (!adjustTarget) return;
-    const qtyNum = Number(newQuantityInput);
-    if (isNaN(qtyNum) || qtyNum < 0) {
+    const newQtyNum = Number(newQuantityInput);
+    if (isNaN(newQtyNum) || newQtyNum < 0) {
       alert('有効な数値を入力してください。');
+      return;
+    }
+
+    // 新しい実在庫数と現在の在庫数の「差分（増減）」を計算
+    const diffQuantity = newQtyNum - adjustTarget.currentQty;
+
+    if (diffQuantity === 0) {
+      alert('在庫数に変更はありません。');
+      setAdjustTarget(null);
       return;
     }
 
@@ -235,14 +245,15 @@ export default function InventoryPage() {
         unitPrice = priceData.price;
       }
 
-      const totalAmount = unitPrice * qtyNum;
+      // 差分に基づいた金額を計算（マイナスになる場合も考慮）
+      const totalAmount = unitPrice * diffQuantity;
 
       const { error } = await supabase.from('history').insert([
         {
           barcode: adjustTarget.barcode,
           store_name: adjustTarget.storeName,
           type: '在庫調整',
-          quantity: qtyNum,
+          quantity: diffQuantity, // 差分（増減数）を保存
           unit_price: unitPrice,
           total_amount: totalAmount,
           user_name: '管理者',
@@ -251,7 +262,7 @@ export default function InventoryPage() {
 
       if (error) throw error;
 
-      alert(`${adjustTarget.storeName} の在庫数を ${qtyNum} に調整しました。`);
+      alert(`${adjustTarget.storeName} の在庫を ${adjustTarget.currentQty}個 から ${newQtyNum}個 に調整しました（増減: ${diffQuantity > 0 ? `+${diffQuantity}` : diffQuantity}個）。`);
       setAdjustTarget(null);
       setNewQuantityInput('');
       fetchInventory();
@@ -406,9 +417,9 @@ export default function InventoryPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
             <h3 className="text-lg font-bold text-gray-800 mb-1">在庫数の直接調整</h3>
-            <p className="text-xs text-gray-500 mb-4">
+            <p className="text-xs text-gray-500 mb-2">
               <strong className="text-gray-800">{adjustTarget.itemName}</strong><br />
-              店舗: <span className="text-blue-600 font-bold">{adjustTarget.storeName}</span>
+              店舗: <span className="text-blue-600 font-bold">{adjustTarget.storeName}</span> (現在庫: {adjustTarget.currentQty}個)
             </p>
 
             <div className="mb-4">
