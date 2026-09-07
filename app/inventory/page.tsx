@@ -216,7 +216,6 @@ export default function InventoryPage() {
     }
 
     try {
-      // 単価の取得（必要に応じてproductsマスタやunit_pricesから取得可能ですが、ここではシンプルに履歴を登録）
       const { data: prodData } = await supabase
         .from('products')
         .select('unit_price')
@@ -225,7 +224,6 @@ export default function InventoryPage() {
 
       let unitPrice = prodData?.unit_price || 0;
       
-      // unit_pricesテーブルがあればそちらを優先チェック
       const { data: priceData } = await supabase
         .from('unit_prices')
         .select('price')
@@ -239,7 +237,6 @@ export default function InventoryPage() {
 
       const totalAmount = unitPrice * qtyNum;
 
-      // historyテーブルに「在庫調整」として新しいレコードを追加
       const { error } = await supabase.from('history').insert([
         {
           barcode: adjustTarget.barcode,
@@ -248,7 +245,7 @@ export default function InventoryPage() {
           quantity: qtyNum,
           unit_price: unitPrice,
           total_amount: totalAmount,
-          user_name: '管理者', // 必要に応じてユーザー名変更
+          user_name: '管理者',
         },
       ]);
 
@@ -265,25 +262,27 @@ export default function InventoryPage() {
 
   const StoreQuantities = ({ item }: { item: InventoryItem }) => (
     <div className="bg-gray-50 px-4 py-4 sm:px-5 border-t border-gray-100 mt-[-1px]">
-      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">店舗別在庫内訳（クリックして調整）</p>
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">店舗別在庫内訳（タップして調整）</p>
       <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-9 gap-2">
         {STORES.map((store) => {
           const qty = item.store_quantities[store] || 0;
           return (
-            <div 
+            <button
+              type="button"
               key={store} 
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation(); // 親要素の開閉イベントが暴発するのを防ぐ
                 setAdjustTarget({ barcode: item.barcode, storeName: store, currentQty: qty, itemName: item.name });
                 setNewQuantityInput(String(qty));
               }}
-              className="bg-white rounded-lg p-2.5 text-center border border-gray-200 shadow-2xs flex flex-col justify-between cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition"
+              className="w-full bg-white rounded-lg p-2.5 text-center border border-gray-200 shadow-2xs flex flex-col justify-between cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 transition text-left"
             >
               <span className="text-[11px] font-medium text-gray-600 truncate">{store}</span>
               <span className={`text-sm font-bold mt-1 ${qty < 0 ? 'text-red-600' : qty === 0 ? 'text-gray-400' : 'text-gray-800'}`}>
                 {qty}
               </span>
               <span className="text-[10px] text-blue-600 mt-1 underline">調整</span>
-            </div>
+            </button>
           );
         })}
       </div>
