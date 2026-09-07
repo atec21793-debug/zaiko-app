@@ -158,17 +158,17 @@ export default function HistoryPage() {
       return;
     }
 
-    const newTotalAmount = item.type === '出庫' ? newUnitPrice * newQuantity : (item.total_amount || 0);
+    // 出庫および在庫調整のときにも金額を計算する
+    const newTotalAmount = (item.type === '出庫' || item.type === '在庫調整') 
+      ? newUnitPrice * newQuantity 
+      : (item.total_amount || 0);
 
     const updatePayload: any = {
       quantity: newQuantity,
       store_name: newStore,
+      unit_price: newUnitPrice,
+      total_amount: newTotalAmount,
     };
-
-    if (item.type === '出庫') {
-      updatePayload.unit_price = newUnitPrice;
-      updatePayload.total_amount = newTotalAmount;
-    }
 
     const { error } = await supabase
       .from('history')
@@ -380,7 +380,7 @@ export default function HistoryPage() {
                       </div>
                     </div>
 
-                    {item.type === '出庫' && (
+                    {(item.type === '出庫' || item.type === '在庫調整') && (
                       <div className="mt-1 pt-2 border-t border-gray-100 text-xs font-bold text-gray-700">
                         金額: ¥{totalAmount.toLocaleString()} (単価: ¥{unitPrice.toLocaleString()})
                       </div>
@@ -418,14 +418,14 @@ export default function HistoryPage() {
                       </div>
                     </div>
 
-                    {item.type === '出庫' && (
+                    {(item.type === '出庫' || item.type === '在庫調整') && (
                       <div>
                         <label className="block text-[10px] font-bold text-gray-600 mb-0.5">単価</label>
                         <input
                           type="number"
                           value={editUnitPrice}
                           onChange={(e) => setEditUnitPrice(Number(e.target.value))}
-                          className="w-full p-1.5 border rounded text-xs bg-white font-bold text-green-700"
+                          className="w-full p-1.5 border rounded text-xs bg-white font-bold text-orange-700"
                           min="0"
                         />
                       </div>

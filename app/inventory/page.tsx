@@ -50,10 +50,13 @@ export default function InventoryPage() {
   
   const [expandedItems, setExpandedItems] = useState<{ [key: string]: boolean }>({});
 
+  // 在庫調整用モーダル・入力の状態
+  const [adjustTarget, setAdjustTarget] = useState<{ barcode: string; storeName: string; currentQty: number; itemName: string } | null>(null);
+  const [newQuantityInput, setNewQuantityInput] = useState<string>('');
+
   useEffect(() => {
     fetchInventory();
 
-    // データベース（history, products）の変更をリアルタイムで監視
     const channel = supabase
       .channel('db-changes')
       .on(
@@ -80,11 +83,9 @@ export default function InventoryPage() {
   const fetchInventory = async () => {
     setLoading(true);
     try {
-      // 1. 製品マスタ取得
       const { data: products, error: prodError } = await supabase.from('products').select('*');
       if (prodError) throw prodError;
 
-      // 2. 履歴データを全件取得（ページング対応）
       let allHistory: any[] = [];
       let page = 0;
       const pageSize = 1000;
@@ -134,7 +135,6 @@ export default function InventoryPage() {
         };
       });
 
-      // 3. 履歴データを古い順にソートして店舗ごとの在庫数を計算
       const sortedHistory = [...allHistory].sort(
         (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       );
@@ -143,7 +143,7 @@ export default function InventoryPage() {
         const barcode = item.barcode;
         const store = item.store_name;
         const quantity = Number(item.quantity) || 0;
-        const type = item.type; // '入庫', '出庫', または '在庫調整'
+        const type = item.type;
 
         if (map[barcode] && store && STORES.includes(store)) {
           if (type === '入庫') {
@@ -151,13 +151,11 @@ export default function InventoryPage() {
           } else if (type === '出庫') {
             map[barcode].store_quantities[store] -= quantity;
           } else if (type === '在庫調整') {
-            // 在庫調整の場合は、その時点の実在庫として数値を上書き設定する
             map[barcode].store_quantities[store] = quantity;
           }
         }
       });
 
-      // 4. 総在庫数の計算
       Object.values(map).forEach((item) => {
         let total = 0;
         STORES.forEach((store) => { total += item.store_quantities[store] || 0; });
@@ -208,16 +206,83 @@ export default function InventoryPage() {
       item.model_number.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+  // 在庫調整の実行
+  const handleExecuteAdjustment = async () => {
+    if (!adjustTarget) return;
+    const qtyNum = Number(newQuantityInput);
+    if (isNaN(qtyNum) || qtyNum < 0) {
+      alert('有効な数値を入力してください。');
+      return;
+    }
+
+    try {
+      // 単価の取得（必要に応じてproductsマスタやunit_pricesから取得可能ですが、ここではシンプルに履歴を登録）
+      const { data: prodData } = await supabase
+        .from('products')
+        .select('unit_price')
+        .eq('barcode', adjustTarget.barcode)
+        .single();
+
+      let unitPrice = prodData?.unit_price || 0;
+      
+      // unit_pricesテーブルがあればそちらを優先チェック
+      const { data: priceData } = await supabase
+        .from('unit_prices')
+        .select('price')
+        .eq('barcode', adjustTarget.barcode)
+        .eq('store_name', adjustTarget.storeName)
+        .maybeSingle();
+
+      if (priceData && priceData.price !== null) {
+        unitPrice = priceData.price;
+      }
+
+      const totalAmount = unitPrice * qtyNum;
+
+      // historyテーブルに「在庫調整」として新しいレコードを追加
+      const { error } = await supabase.from('history').insert([
+        {
+          barcode: adjustTarget.barcode,
+          store_name: adjustTarget.storeName,
+          type: '在庫調整',
+          quantity: qtyNum,
+          unit_price: unitPrice,
+          total_amount: totalAmount,
+          user_name: '管理者', // 必要に応じてユーザー名変更
+        },
+      ]);
+
+      if (error) throw error;
+
+      alert(`${adjustTarget.storeName} の在庫数を ${qtyNum} に調整しました。`);
+      setAdjustTarget(null);
+      setNewQuantityInput('');
+      fetchInventory();
+    } catch (error: any) {
+      alert('在庫調整エラー: ' + error.message);
+    }
+  };
+
   const StoreQuantities = ({ item }: { item: InventoryItem }) => (
     <div className="bg-gray-50 px-4 py-4 sm:px-5 border-t border-gray-100 mt-[-1px]">
-      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">店舗別在庫内訳</p>
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">店舗別在庫内訳（クリックして調整）</p>
       <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-9 gap-2">
         {STORES.map((store) => {
           const qty = item.store_quantities[store] || 0;
           return (
-            <div key={store} className="bg-white rounded-lg p-2.5 text-center border border-gray-200 shadow-2xs flex flex-col justify-between">
+            <div 
+              key={store} 
+              onClick={() => {
+                setAdjustTarget({ barcode: item.barcode, storeName: store, currentQty: qty, itemName: item.name });
+                setNewQuantityInput(String(qty));
+              }}
+              className="bg-white rounded-lg p-2.5 text-center border border-gray-200 shadow-2xs flex flex-col justify-between cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition"
+            >
               <span className="text-[11px] font-medium text-gray-600 truncate">{store}</span>
-              <span className={`text-sm font-bold mt-1 ${qty < 0 ? 'text-red-600' : qty === 0 ? 'text-gray-400' : 'text-gray-800'}`}>{qty}</span>
+              <span className={`text-sm font-bold mt-1 ${qty < 0 ? 'text-red-600' : qty === 0 ? 'text-gray-400' : 'text-gray-800'}`}>
+                {qty}
+              </span>
+              <span className="text-[10px] text-blue-600 mt-1 underline">調整</span>
             </div>
           );
         })}
@@ -286,7 +351,6 @@ export default function InventoryPage() {
           <div className="text-center py-12 text-gray-500">読み込み中...</div>
         ) : (
           <div className="space-y-3">
-            
             {CATEGORIES.map(cat => {
               const items = categorizedInventory[cat.key] || [];
               const filteredItems = searchItems(items);
@@ -334,10 +398,51 @@ export default function InventoryPage() {
                 )}
               </div>
             ))}
-
           </div>
         )}
       </div>
+
+      {/* 在庫調整用モーダル */}
+      {adjustTarget && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
+            <h3 className="text-lg font-bold text-gray-800 mb-1">在庫数の直接調整</h3>
+            <p className="text-xs text-gray-500 mb-4">
+              <strong className="text-gray-800">{adjustTarget.itemName}</strong><br />
+              店舗: <span className="text-blue-600 font-bold">{adjustTarget.storeName}</span>
+            </p>
+
+            <div className="mb-4">
+              <label className="block text-xs font-bold text-gray-700 mb-1">新しい実在庫数</label>
+              <input
+                type="number"
+                value={newQuantityInput}
+                onChange={(e) => setNewQuantityInput(e.target.value)}
+                className="w-full p-2.5 border border-gray-300 rounded-lg text-lg font-bold text-center bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                min="0"
+                autoFocus
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setAdjustTarget(null)}
+                className="flex-1 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-bold text-sm transition"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteAdjustment}
+                className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-sm shadow-sm transition"
+              >
+                保存する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
