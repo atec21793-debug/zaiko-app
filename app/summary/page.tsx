@@ -39,9 +39,6 @@ export default function SummaryPage() {
   // 出庫者別詳細モーダル用の状態
   const [selectedUserForDetail, setSelectedUserForDetail] = useState<string | null>(null);
 
-  // --- 在庫調整表示切替用の状態 ---
-  const [showAdjustments, setShowAdjustments] = useState(false);
-
   // --- 材料購入に関する状態 ---
   const [purchases, setPurchases] = useState<MaterialPurchase[]>([]);
   const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
@@ -180,17 +177,22 @@ export default function SummaryPage() {
     }
   };
 
-  // 3. 出庫者別の合計金額の計算（店舗フィルター連動 ※「出庫」のみ対象）
+  // 3. 担当別合計金額の計算（天野・佐々木・宇治のみ対象。店舗フィルター連動）
   const userSummary = useMemo(() => {
-    const summary: { [key: string]: number } = {};
+    const summary: { [key: string]: number } = {
+      '天野': 0,
+      '佐々木': 0,
+      '宇治': 0,
+    };
+
     historyList
       .filter((item) => {
         const itemMonthStr = getItemMonthStr(item.created_at);
         const matchMonth = !selectedMonth || itemMonthStr === selectedMonth;
         if (!matchMonth) return false;
         
-        // 「出庫」のみを対象にする
-        if (item.type !== '出庫' || !item.user_name || item.user_name === '-') return false;
+        // 対象ユーザー（天野・佐々木・宇治）のみ集計する
+        if (!['天野', '佐々木', '宇治'].includes(item.user_name)) return false;
 
         if (searchStore.trim() !== '') {
           const matchStore = item.store_name && item.store_name.toLowerCase().includes(searchStore.trim().toLowerCase());
@@ -204,48 +206,15 @@ export default function SummaryPage() {
           ? Number(item.total_amount) 
           : (Number(item.unit_price || 0) * item.quantity);
 
-        summary[item.user_name] = (summary[item.user_name] || 0) + amount;
+        const uName = item.user_name;
+        if (summary[uName] !== undefined) {
+          summary[uName] += amount;
+        }
       });
     return summary;
   }, [historyList, selectedMonth, searchStore]);
 
-  // 4. 在庫調整データの集計（ボタン押下時用）
-  const adjustmentSummaryData = useMemo(() => {
-    const materialMap: { [name: string]: { name: string; quantity: number; totalAmount: number; type: string } } = {};
-
-    historyList
-      .filter((item) => {
-        const itemMonthStr = getItemMonthStr(item.created_at);
-        const matchMonth = !selectedMonth || itemMonthStr === selectedMonth;
-        if (!matchMonth) return false;
-        if (item.type !== '在庫調整') return false;
-
-        if (searchStore.trim() !== '') {
-          const matchStore = item.store_name && item.store_name.toLowerCase().includes(searchStore.trim().toLowerCase());
-          if (!matchStore) return false;
-        }
-
-        return true;
-      })
-      .forEach((item) => {
-        const prodInfo = productMap[item.barcode];
-        const name = prodInfo ? prodInfo.name : `(未登録: ${item.barcode})`;
-        const amount = item.total_amount !== undefined && item.total_amount !== null 
-          ? Number(item.total_amount) 
-          : (Number(item.unit_price || 0) * item.quantity);
-
-        const key = `${name}_${item.user_name || '調整'}`;
-        if (!materialMap[key]) {
-          materialMap[key] = { name, quantity: 0, totalAmount: 0, type: item.user_name || '在庫調整' };
-        }
-        materialMap[key].quantity += item.quantity;
-        materialMap[key].totalAmount += amount;
-      });
-
-    return Object.values(materialMap);
-  }, [historyList, selectedMonth, searchStore, productMap]);
-
-  // 5. 選択された出庫者の内訳計算
+  // 5. 選択された担当者の内訳計算
   const selectedUserMaterials = useMemo(() => {
     if (!selectedUserForDetail) return [];
     const materialMap: { [name: string]: { name: string; quantity: number; totalAmount: number; type: string } } = {};
@@ -255,7 +224,7 @@ export default function SummaryPage() {
         const itemMonthStr = getItemMonthStr(item.created_at);
         const matchMonth = !selectedMonth || itemMonthStr === selectedMonth;
         if (!matchMonth) return false;
-        if (item.type !== '出庫' || item.user_name !== selectedUserForDetail) return false;
+        if (item.user_name !== selectedUserForDetail) return false;
 
         if (searchStore.trim() !== '') {
           const matchStore = item.store_name && item.store_name.toLowerCase().includes(searchStore.trim().toLowerCase());
@@ -282,9 +251,9 @@ export default function SummaryPage() {
     return Object.values(materialMap);
   }, [historyList, selectedMonth, searchStore, selectedUserForDetail, productMap]);
 
-  // 6. 材料ごとに入庫数・出庫数・調整金額などを集計
+  // 6. 材料ごとに入庫数・出庫数などを集計（調整関連の表示を完全に削除）
   const summaryData = useMemo(() => {
-    const map: { [barcode: string]: { name: string; inQty: number; outQty: number; outAmount: number; adjustAmount: number; adjustQty: number } } = {};
+    const map: { [barcode: string]: { name: string; inQty: number; outQty: number; outAmount: number } } = {};
 
     historyList
       .filter((item) => {
@@ -304,7 +273,7 @@ export default function SummaryPage() {
         const name = prodInfo ? prodInfo.name : `(未登録: ${barcode})`;
 
         if (!map[barcode]) {
-          map[barcode] = { name, inQty: 0, outQty: 0, outAmount: 0, adjustAmount: 0, adjustQty: 0 };
+          map[barcode] = { name, inQty: 0, outQty: 0, outAmount: 0 };
         }
 
         const amount = item.total_amount !== undefined && item.total_amount !== null
@@ -316,9 +285,6 @@ export default function SummaryPage() {
         } else if (item.type === '出庫') {
           map[barcode].outQty += item.quantity;
           map[barcode].outAmount += amount;
-        } else if (item.type === '在庫調整') {
-          map[barcode].adjustQty += item.quantity;
-          map[barcode].adjustAmount += amount;
         }
       });
 
@@ -361,68 +327,32 @@ export default function SummaryPage() {
         </div>
       </div>
 
-      {/* --- 担当別 合計金額カード --- */}
+      {/* --- 担当別 合計金額カード（天野・佐々木・宇治） --- */}
       <div className="bg-gray-800 text-white p-4 rounded-xl shadow-md mb-6 space-y-4">
         <div>
           <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-1">
             <h2 className="text-sm font-bold">
               👤 担当別 合計金額 ({selectedMonth || '全期間'})
             </h2>
-            <button
-              type="button"
-              onClick={() => setShowAdjustments(!showAdjustments)}
-              className="text-[11px] bg-gray-700 hover:bg-gray-600 text-gray-200 px-2 py-1 rounded transition font-bold"
-            >
-              {showAdjustments ? '在庫調整を隠す' : '⚙️ 在庫調整の内訳を見る'}
-            </button>
           </div>
 
-          {Object.keys(userSummary).length === 0 ? (
-            <p className="text-xs text-gray-400 py-2">この条件に該当するデータはありません</p>
-          ) : (
-            <div className="space-y-2 mt-2">
-              {Object.entries(userSummary).map(([user, total]) => (
-                <div 
-                  key={user}
-                  onClick={() => setSelectedUserForDetail(selectedUserForDetail === user ? null : user)}
-                  className={`flex justify-between items-center p-2.5 rounded-lg cursor-pointer transition ${
-                    selectedUserForDetail === user ? 'bg-gray-700 ring-2 ring-blue-400' : 'bg-gray-900/50 hover:bg-gray-700'
-                  }`}
-                >
-                  <span className="text-sm font-bold flex items-center gap-1">
-                    {user} <span className="text-[10px] text-gray-400 font-normal">（タップで詳細）</span>
-                  </span>
-                  <span className="text-base font-black text-green-400">¥{total.toLocaleString()}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* 在庫調整表示エリア（ボタンで開閉） */}
-        {showAdjustments && (
-          <div className="bg-gray-900/80 border border-gray-700 p-3 rounded-lg space-y-2 mt-3">
-            <div className="text-xs font-bold text-orange-400 flex justify-between items-center">
-              <span>🔧 在庫調整の内訳</span>
-              <span>合計: ¥{adjustmentSummaryData.reduce((s, i) => s + i.totalAmount, 0).toLocaleString()}</span>
-            </div>
-            {adjustmentSummaryData.length === 0 ? (
-              <p className="text-xs text-gray-400">この期間の在庫調整データはありません</p>
-            ) : (
-              <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                {adjustmentSummaryData.map((m) => (
-                  <div key={`${m.name}-${m.type}`} className="bg-gray-800 p-2 rounded border border-gray-700 text-xs flex justify-between items-center">
-                    <div>
-                      <span className="font-bold text-gray-200">{m.name}</span>
-                      <span className="ml-2 text-[10px] bg-gray-700 text-gray-300 px-1.5 py-0.5 rounded font-bold">{m.type}</span>
-                    </div>
-                    <span className="font-bold text-gray-300">数量: {m.quantity}個 (¥{m.totalAmount.toLocaleString()})</span>
-                  </div>
-                ))}
+          <div className="space-y-2 mt-2">
+            {Object.entries(userSummary).map(([user, total]) => (
+              <div 
+                key={user}
+                onClick={() => setSelectedUserForDetail(selectedUserForDetail === user ? null : user)}
+                className={`flex justify-between items-center p-2.5 rounded-lg cursor-pointer transition ${
+                  selectedUserForDetail === user ? 'bg-gray-700 ring-2 ring-blue-400' : 'bg-gray-900/50 hover:bg-gray-700'
+                }`}
+              >
+                <span className="text-sm font-bold flex items-center gap-1">
+                  {user} <span className="text-[10px] text-gray-400 font-normal">（タップで詳細）</span>
+                </span>
+                <span className="text-base font-black text-green-400">¥{total.toLocaleString()}</span>
               </div>
-            )}
+            ))}
           </div>
-        )}
+        </div>
 
         {/* 購入合計 */}
         <div 
@@ -470,7 +400,7 @@ export default function SummaryPage() {
                     <span className="font-bold text-gray-800">{m.name}</span>
                     <span className="ml-2 text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-bold">{m.type}</span>
                   </div>
-                  <span className="font-bold">数量: {m.quantity}個 (¥{m.totalAmount.toLocaleString()})</span>
+ &nbsp;                 <span className="font-bold">数量: {m.quantity}個 (¥{m.totalAmount.toLocaleString()})</span>
                 </div>
               ))}
             </div>
@@ -478,7 +408,7 @@ export default function SummaryPage() {
         </div>
       )}
 
-      {/* 集計結果テーブル/リスト */}
+      {/* 集計結果テーブル/リスト（調整分金額を削除） */}
       <h2 className="font-bold text-base mb-3">材料別 入出庫内訳 ({summaryData.length}件)</h2>
       {loading ? (
         <p className="text-center text-gray-500 py-8">読み込み中...</p>
@@ -489,7 +419,7 @@ export default function SummaryPage() {
           {summaryData.map((item) => (
             <div key={item.name} className="p-3 rounded-xl border shadow-sm bg-white flex flex-col gap-2">
               <div className="font-bold text-base text-gray-800">{item.name}</div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-gray-50 p-2 rounded-lg text-center text-xs">
+              <div className="grid grid-cols-3 gap-2 bg-gray-50 p-2 rounded-lg text-center text-xs">
                 <div>
                   <span className="block text-gray-500 font-bold">入庫数</span>
                   <span className="text-gray-800 font-black text-sm">+{item.inQty} 個</span>
@@ -501,10 +431,6 @@ export default function SummaryPage() {
                 <div>
                   <span className="block text-gray-500 font-bold">出庫金額</span>
                   <span className="text-gray-800 font-black text-sm">¥{item.outAmount.toLocaleString()}</span>
-                </div>
-                <div>
-                  <span className="block text-orange-600 font-bold">調整分金額</span>
-                  <span className="text-orange-700 font-black text-sm">¥{item.adjustAmount.toLocaleString()}</span>
                 </div>
               </div>
             </div>
