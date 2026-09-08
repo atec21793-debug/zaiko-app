@@ -28,8 +28,8 @@ export default function OutboundPage() {
 
   const [productsList, setProductsList] = useState<Product[]>([]);
 
-  // 「在庫調整」という名前のユーザーを追加
-  const users = ['天野', '佐々木', '在庫調整'];
+  // 「在庫調整」をなくし、「宇治」を追加
+  const users = ['天野', '佐々木', '宇治'];
   const stores = ['カパス', '松尾', 'ロイヤル', '電材センター', 'プロストック', 'コーナン', '建デポ', 'ビバホーム', '港屋', 'コメリ', 'その他'];
 
   useEffect(() => {
@@ -135,7 +135,6 @@ export default function OutboundPage() {
 
     productsList.forEach(p => {
       const model = p.model_number || '';
-      // 「スリムダクト」などはダクトのグループに混ぜず、モデル番号や名前に応じて適切に振り分ける（または「その他」へ）
       if (p.name.includes('L頭')) {
         groups.lHead.push(p);
       } else if (p.name.includes('頭')) {
@@ -160,7 +159,7 @@ export default function OutboundPage() {
     e.preventDefault();
     const qtyNum = Number(quantity);
     if (!barcode || quantity === '' || qtyNum === 0) {
-      alert('バーコードと、0以外の増減数を入力してください');
+      alert('バーコードと、0以外の出庫数を入力してください');
       return;
     }
 
@@ -175,19 +174,11 @@ export default function OutboundPage() {
       .maybeSingle();
 
     const currentQty = inv ? inv.quantity : 0;
-    let newQty = 0;
-    let diffQty = 0;
-    let historyType = '出庫';
-
-    if (selectedUser === '在庫調整') {
-      newQty = currentQty + qtyNum;
-      diffQty = Math.abs(qtyNum);
-      historyType = '在庫調整';
-    } else {
-      newQty = currentQty - qtyNum;
-      diffQty = qtyNum;
-      historyType = '出庫';
-    }
+    
+    // 全員出庫処理（現在庫から数量を引く）
+    const newQty = currentQty - qtyNum;
+    const diffQty = qtyNum;
+    const historyType = '出庫';
 
     const totalAmount = diffQty * currentUnitPrice;
 
@@ -231,9 +222,7 @@ export default function OutboundPage() {
   return (
     <main className="w-full max-w-full min-h-screen p-4 bg-gray-50">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">
-          {selectedUser === '在庫調整' ? '在庫調整処理' : '出庫処理'}
-        </h1>
+        <h1 className="text-2xl font-bold">出庫処理</h1>
         <Link 
           href="/" 
           className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg shadow-sm font-bold text-sm transition"
@@ -242,7 +231,7 @@ export default function OutboundPage() {
         </Link>
       </div>
 
-      {/* 3つのボタン（天野、佐々木、在庫調整） */}
+      {/* 天野、佐々木、宇治のタブ */}
       <div className="flex bg-gray-200 p-1 rounded-xl mb-4">
         {users.map((user) => (
           <button
@@ -375,21 +364,19 @@ export default function OutboundPage() {
         </div>
 
         <div>
-          <label className="block text-xs font-bold text-gray-600 mb-1">
-            {selectedUser === '在庫調整' ? '増減数（例: +2 や -1）' : '出庫数量'}
-          </label>
+          <label className="block text-xs font-bold text-gray-600 mb-1">出庫数量</label>
           <input
             type="number"
             value={quantity}
             onChange={(e) => setQuantity(e.target.value === '' ? '' : Number(e.target.value))}
             required
-            placeholder={selectedUser === '在庫調整' ? "増やす場合は 2、減らす場合は -1" : "数量を入力"}
+            placeholder="数量を入力"
             className="w-full p-3 border rounded-lg text-base bg-white font-bold"
           />
         </div>
 
         <button type="submit" className="w-full bg-gray-800 text-white p-5 rounded-xl font-bold text-lg shadow-lg mt-6">
-          {selectedUser === '在庫調整' ? '在庫調整を確定する' : `出庫を確定する (${selectedUser})`}
+          {`出庫を確定する (${selectedUser})`}
         </button>
       </form>
     </main>
