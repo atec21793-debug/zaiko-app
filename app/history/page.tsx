@@ -16,7 +16,8 @@ export default function HistoryPage() {
   const todayStr = new Date().toISOString().substring(0, 7);
   const [selectedMonth, setSelectedMonth] = useState(todayStr); 
 
-  const [activeTab, setActiveTab] = useState<'all' | '出庫' | '入庫' | '在庫調整'>('all');
+  // タブの状態（'zero' を追加）
+  const [activeTab, setActiveTab] = useState<'all' | '出庫' | '入庫' | 'zero'>('all');
   const [searchStore, setSearchStore] = useState('');
   const [searchMaterial, setSearchMaterial] = useState('');
 
@@ -198,7 +199,15 @@ export default function HistoryPage() {
 
   const filteredHistory = useMemo(() => {
     return historyList.filter((item) => {
-      if (activeTab !== 'all' && item.type !== activeTab) {
+      // 単価・金額が0円かどうかの判定
+      const unitPrice = item.unit_price !== undefined && item.unit_price !== null ? Number(item.unit_price) : 0;
+      const totalAmount = item.total_amount !== undefined && item.total_amount !== null ? Number(item.total_amount) : (unitPrice * item.quantity);
+      const isZero = unitPrice === 0 || totalAmount === 0;
+
+      if (activeTab === 'zero') {
+        // 「単価0」タブ表示時は単価・金額が0円のデータのみ抽出
+        if (!isZero) return false;
+      } else if (activeTab !== 'all' && item.type !== activeTab) {
         return false;
       }
 
@@ -301,12 +310,12 @@ export default function HistoryPage() {
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab('在庫調整')}
+          onClick={() => setActiveTab('zero')}
           className={`flex-1 py-2 rounded-lg transition ${
-            activeTab === '在庫調整' ? 'bg-white text-orange-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+            activeTab === 'zero' ? 'bg-white text-red-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'
           }`}
         >
-          調整
+          単価0
         </button>
       </div>
 
