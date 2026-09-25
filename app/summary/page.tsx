@@ -146,32 +146,27 @@ export default function SummaryPage() {
     }
   };
 
-  const getItemMonthStr = (createdAt: string) => {
-    if (!createdAt) return '';
-    try {
-      const normalizedDate = String(createdAt).replace(/\//g, '-');
-      const date = new Date(normalizedDate);
-      if (isNaN(date.getTime())) return normalizedDate.substring(0, 7);
-      const jstDate = new Date(date.getTime() + (9 * 60 * 60 * 1000));
-      return jstDate.toISOString().substring(0, 7);
-    } catch (e) {
-      return String(createdAt).replace(/\//g, '-').substring(0, 7);
-    }
+  // 日付文字列から "YYYY-MM" を抽出する共通処理
+  const getMonthStr = (dateStr: string) => {
+    if (!dateStr) return '';
+    const norm = String(dateStr).replace(/\//g, '-');
+    return norm.substring(0, 7);
   };
 
-  // 購入合計: 手動購入データの合計 + カパスの「入庫」履歴のみ合算
+  // 購入合計: 手動購入データの合計(全店舗) + 履歴(history)の「カパス入庫」のみ
   const totalPurchaseAmount = useMemo(() => {
-    // 1. 手動登録データ(purchases)の合計（選択中の月でフィルタ）
+    // 1. 手動購入データ (material_purchases) の合計
     const manualSum = purchases
       .filter((item) => {
         if (!item.date) return false;
-        const formattedDate = String(item.date).replace(/\//g, '-');
-        const itemMonthStr = formattedDate.substring(0, 7);
-        return !selectedMonth || itemMonthStr === selectedMonth;
+        const itemMonthStr = getMonthStr(item.date);
+        // 選択された月がある場合は一致するものだけ
+        if (selectedMonth && itemMonthStr !== selectedMonth) return false;
+        return true;
       })
       .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
 
-    // 2. 履歴(history)のうち「カパス」かつ「入庫」のデータのみ合計
+    // 2. 履歴データ (historyList) のうち「カパス」の「入庫」の合計
     const kapasInboundSum = historyList
       .filter((item) => {
         // 入庫判定
@@ -179,12 +174,12 @@ export default function SummaryPage() {
         const isInbound = itemType.includes('入庫') || itemType.includes('購入') || itemType.includes('仕入');
         if (!isInbound) return false;
 
-        // 店舗判定：「カパス」のみ
-        const storeField = String(item.store_name || item.store || item.memo || '');
-        if (!storeField.includes('カパス')) return false;
+        // 店舗判定（店舗名に「カパス」が含まれるか）
+        const storeName = String(item.store_name || item.store || item.memo || '');
+        if (!storeName.includes('カパス')) return false;
 
         // 月判定
-        const itemMonthStr = getItemMonthStr(item.created_at);
+        const itemMonthStr = getMonthStr(item.created_at);
         if (selectedMonth && itemMonthStr !== selectedMonth) return false;
 
         return true;
@@ -206,6 +201,7 @@ export default function SummaryPage() {
         return sum + amount;
       }, 0);
 
+    console.log('手動購入合計:', manualSum, 'カパス入庫合計:', kapasInboundSum);
     return manualSum + kapasInboundSum;
   }, [purchases, historyList, selectedMonth, productMap]);
 
@@ -219,7 +215,7 @@ export default function SummaryPage() {
 
     historyList
       .filter((item) => {
-        const itemMonthStr = getItemMonthStr(item.created_at);
+        const itemMonthStr = getMonthStr(item.created_at);
         if (selectedMonth && itemMonthStr !== selectedMonth) return false;
         
         if (!['天野', '佐々木', '宇治'].includes(item.user_name)) return false;
@@ -261,7 +257,7 @@ export default function SummaryPage() {
 
     historyList
       .filter((item) => {
-        const itemMonthStr = getItemMonthStr(item.created_at);
+        const itemMonthStr = getMonthStr(item.created_at);
         if (selectedMonth && itemMonthStr !== selectedMonth) return false;
         if (item.user_name !== selectedUserForDetail) return false;
 
@@ -306,7 +302,7 @@ export default function SummaryPage() {
 
     historyList
       .filter((item) => {
-        const itemMonthStr = getItemMonthStr(item.created_at);
+        const itemMonthStr = getMonthStr(item.created_at);
         if (selectedMonth && itemMonthStr !== selectedMonth) return false;
 
         if (searchStore.trim() !== '') {
@@ -421,7 +417,7 @@ export default function SummaryPage() {
           <div className="flex justify-between items-center bg-gray-900/70 p-3 rounded-lg hover:bg-gray-700 transition">
             <div>
               <div className="text-xs font-bold text-gray-300 flex items-center gap-1.5">
-                <span>購入合計（手動入力 ＋ カパス入庫）</span>
+                <span>購入合計（購入履歴 ＋ カパス入庫）</span>
               </div>
               <div className="text-xl font-black text-green-400 mt-1">
                 ¥{totalPurchaseAmount.toLocaleString()}
