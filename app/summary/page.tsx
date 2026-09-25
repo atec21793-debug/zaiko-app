@@ -63,7 +63,7 @@ export default function SummaryPage() {
     const map: { [barcode: string]: { name: string; price?: number } } = {};
     if (prodData) {
       prodData.forEach((p) => {
-        map[p.barcode] = { name: p.name, price: Number(p.price || p.unit_price || 0) };
+        map[p.barcode] = { name: p.name, price: Number(p.price || p.unit_price || p.cost || 0) };
       });
     }
     setProductMap(map);
@@ -160,7 +160,7 @@ export default function SummaryPage() {
     }
   };
 
-  // 購入合計: 手動登録された購入データ + 履歴（historyList）の「カパス（または検索店舗）」かつ「入庫」の金額を合算
+  // 購入合計: 手動登録の購入データ + 履歴（historyList）のカパス入庫（または絞り込み店舗の入庫）の金額を合算
   const totalPurchaseAmount = useMemo(() => {
     // 1. material_purchases テーブルの合計
     const manualPurchaseSum = purchases
@@ -178,36 +178,40 @@ export default function SummaryPage() {
       })
       .reduce((sum, item) => sum + Number(item.amount), 0);
 
-    // 2. historyList テーブルの「入庫」合計
-    // 検索入力がある場合はその店舗、入力がない場合は「カパス」を対象
-    const targetStore = searchStore.trim() !== '' ? searchStore.trim() : 'カパス';
+    // 2. historyList テーブルの「入庫」合計（店舗絞り込みがない場合は「カパス」を対象）
+    const targetStore = searchStore.trim() !== '' ? searchStore.trim().toLowerCase() : 'カパス';
 
     const historyInboundSum = historyList
       .filter((item) => {
-        // 入庫データのみ
-        if (item.type !== '入庫') return false;
+        // 「入庫」「購入」「仕入れ」「入庫（カパス）」等の表記揺れを許容
+        const itemType = String(item.type || '');
+        const isInbound = itemType.includes('入庫') || itemType.includes('購入') || itemType.includes('仕入');
+        if (!isInbound) return false;
 
         const itemMonthStr = getItemMonthStr(item.created_at);
         const matchMonth = !selectedMonth || itemMonthStr === selectedMonth;
         if (!matchMonth) return false;
 
-        // 店舗判定: store_name、store、または選択店舗のいずれかに「カパス」等が含まれるか
-        const storeName = item.store_name || item.store || '';
-        const matchStore = storeName.toLowerCase().includes(targetStore.toLowerCase());
+        // 店舗判定: store_name, store, user_name, memo 等のあらゆるフィールドから判定
+        const storeField = String(item.store_name || item.store || item.memo || '').toLowerCase();
+        const matchStore = storeField.includes(targetStore) || (targetStore === 'カパス' && storeField === '');
         
         return matchStore;
       })
       .reduce((sum, item) => {
-        // 金額の算出優先度: total_amount -> (unit_price * quantity) -> (製品マスタの単価 * quantity)
         let amount = 0;
+        const qty = Number(item.quantity || 1);
+
         if (item.total_amount !== undefined && item.total_amount !== null && Number(item.total_amount) > 0) {
           amount = Number(item.total_amount);
         } else if (item.unit_price !== undefined && item.unit_price !== null && Number(item.unit_price) > 0) {
-          amount = Number(item.unit_price) * Number(item.quantity || 1);
+          amount = Number(item.unit_price) * qty;
+        } else if (item.price !== undefined && item.price !== null && Number(item.price) > 0) {
+          amount = Number(item.price) * qty;
         } else {
           const prod = productMap[item.barcode];
           const unitPrice = prod?.price || 0;
-          amount = unitPrice * Number(item.quantity || 1);
+          amount = unitPrice * qty;
         }
 
         return sum + amount;
@@ -234,7 +238,7 @@ export default function SummaryPage() {
         if (!['天野', '佐々木', '宇治'].includes(item.user_name)) return false;
 
         if (searchStore.trim() !== '') {
-          const storeName = item.store_name || item.store || '';
+          const storeName = String(item.store_name || item.store || '');
           const matchStore = storeName.toLowerCase().includes(searchStore.trim().toLowerCase());
           if (!matchStore) return false;
         }
@@ -243,14 +247,16 @@ export default function SummaryPage() {
       })
       .forEach((item) => {
         let amount = 0;
+        const qty = Number(item.quantity || 1);
+
         if (item.total_amount !== undefined && item.total_amount !== null && Number(item.total_amount) > 0) {
           amount = Number(item.total_amount);
         } else if (item.unit_price !== undefined && item.unit_price !== null && Number(item.unit_price) > 0) {
-          amount = Number(item.unit_price) * Number(item.quantity || 1);
+          amount = Number(item.unit_price) * qty;
         } else {
           const prod = productMap[item.barcode];
           const unitPrice = prod?.price || 0;
-          amount = unitPrice * Number(item.quantity || 1);
+          amount = unitPrice * qty;
         }
 
         const uName = item.user_name;
@@ -274,7 +280,7 @@ export default function SummaryPage() {
         if (item.user_name !== selectedUserForDetail) return false;
 
         if (searchStore.trim() !== '') {
-          const storeName = item.store_name || item.store || '';
+          const storeName = String(item.store_name || item.store || '');
           const matchStore = storeName.toLowerCase().includes(searchStore.trim().toLowerCase());
           if (!matchStore) return false;
         }
@@ -286,13 +292,15 @@ export default function SummaryPage() {
         const name = prodInfo ? prodInfo.name : `(未登録: ${item.barcode})`;
 
         let amount = 0;
+        const qty = Number(item.quantity || 1);
+
         if (item.total_amount !== undefined && item.total_amount !== null && Number(item.total_amount) > 0) {
           amount = Number(item.total_amount);
         } else if (item.unit_price !== undefined && item.unit_price !== null && Number(item.unit_price) > 0) {
-          amount = Number(item.unit_price) * Number(item.quantity || 1);
+          amount = Number(item.unit_price) * qty;
         } else {
           const unitPrice = prodInfo?.price || 0;
-          amount = unitPrice * Number(item.quantity || 1);
+          amount = unitPrice * qty;
         }
 
         const key = `${name}_${item.type}`;
@@ -306,7 +314,7 @@ export default function SummaryPage() {
     return Object.values(materialMap);
   }, [historyList, selectedMonth, searchStore, selectedUserForDetail, productMap]);
 
-  // 6. 材料ごとに入庫数・出庫数などを集計（調整関連の表示を完全に削除）
+  // 6. 材料ごとに入庫数・出庫数などを集計
   const summaryData = useMemo(() => {
     const map: { [barcode: string]: { name: string; inQty: number; outQty: number; outAmount: number } } = {};
 
@@ -316,7 +324,7 @@ export default function SummaryPage() {
         if (selectedMonth && itemMonthStr !== selectedMonth) return false;
 
         if (searchStore.trim() !== '') {
-          const storeName = item.store_name || item.store || '';
+          const storeName = String(item.store_name || item.store || '');
           const matchStore = storeName.toLowerCase().includes(searchStore.trim().toLowerCase());
           if (!matchStore) return false;
         }
@@ -333,18 +341,21 @@ export default function SummaryPage() {
         }
 
         let amount = 0;
+        const qty = Number(item.quantity || 1);
+
         if (item.total_amount !== undefined && item.total_amount !== null && Number(item.total_amount) > 0) {
           amount = Number(item.total_amount);
         } else if (item.unit_price !== undefined && item.unit_price !== null && Number(item.unit_price) > 0) {
-          amount = Number(item.unit_price) * Number(item.quantity || 1);
+          amount = Number(item.unit_price) * qty;
         } else {
           const unitPrice = prodInfo?.price || 0;
-          amount = unitPrice * Number(item.quantity || 1);
+          amount = unitPrice * qty;
         }
 
-        if (item.type === '入庫') {
+        const itemType = String(item.type || '');
+        if (itemType.includes('入庫') || itemType.includes('購入') || itemType.includes('仕入')) {
           map[barcode].inQty += Number(item.quantity || 0);
-        } else if (item.type === '出庫') {
+        } else if (itemType.includes('出庫')) {
           map[barcode].outQty += Number(item.quantity || 0);
           map[barcode].outAmount += amount;
         }
@@ -470,7 +481,7 @@ export default function SummaryPage() {
         </div>
       )}
 
-      {/* 集計結果テーブル/リスト（調整分金額を削除） */}
+      {/* 集計結果テーブル/リスト */}
       <h2 className="font-bold text-base mb-3">材料別 入出庫内訳 ({summaryData.length}件)</h2>
       {loading ? (
         <p className="text-center text-gray-500 py-8">読み込み中...</p>
