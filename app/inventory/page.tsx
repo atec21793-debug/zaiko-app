@@ -50,12 +50,12 @@ export default function InventoryPage() {
   
   const [expandedItems, setExpandedItems] = useState<{ [key: string]: boolean }>({});
 
-  // 在庫調整用モーダル・入力の状態（現在庫 `currentQty` も一緒に保持するように型とstateを拡張）
+  // 在庫調整用モーダル・入力の状態
   const [adjustTarget, setAdjustTarget] = useState<{ barcode: string; storeName: string; currentQty: number; itemName: string } | null>(null);
   const [newQuantityInput, setNewQuantityInput] = useState<string>('');
 
   useEffect(() => {
-    fetchInventory();
+    fetchInventory(true);
 
     const channel = supabase
       .channel('db-changes')
@@ -63,14 +63,14 @@ export default function InventoryPage() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'history' },
         () => {
-          fetchInventory();
+          fetchInventory(false);
         }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'products' },
         () => {
-          fetchInventory();
+          fetchInventory(false);
         }
       )
       .subscribe();
@@ -80,8 +80,8 @@ export default function InventoryPage() {
     };
   }, []);
 
-  const fetchInventory = async () => {
-    setLoading(true);
+  const fetchInventory = async (showLoading = false) => {
+    if (showLoading) setLoading(true);
     try {
       const { data: products, error: prodError } = await supabase.from('products').select('*');
       if (prodError) throw prodError;
@@ -151,7 +151,6 @@ export default function InventoryPage() {
           } else if (type === '出庫') {
             map[barcode].store_quantities[store] -= quantity;
           } else if (type === '在庫調整') {
-            // 在庫調整も履歴の数量（増減分）を加算・反映
             map[barcode].store_quantities[store] += quantity;
           }
         }
@@ -189,7 +188,7 @@ export default function InventoryPage() {
     } catch (error) {
       console.error('エラー:', error);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
@@ -216,7 +215,6 @@ export default function InventoryPage() {
       return;
     }
 
-    // 新しい実在庫数と現在の在庫数の「差分（増減）」を計算
     const diffQuantity = newQtyNum - adjustTarget.currentQty;
 
     if (diffQuantity === 0) {
@@ -245,7 +243,6 @@ export default function InventoryPage() {
         unitPrice = priceData.price;
       }
 
-      // 差分に基づいた金額を計算（マイナスになる場合も考慮）
       const totalAmount = unitPrice * diffQuantity;
 
       const { error } = await supabase.from('history').insert([
@@ -253,7 +250,7 @@ export default function InventoryPage() {
           barcode: adjustTarget.barcode,
           store_name: adjustTarget.storeName,
           type: '在庫調整',
-          quantity: diffQuantity, // 差分（増減数）を保存
+          quantity: diffQuantity,
           unit_price: unitPrice,
           total_amount: totalAmount,
           user_name: '管理者',
@@ -262,10 +259,34 @@ export default function InventoryPage() {
 
       if (error) throw error;
 
+      // ローカルステートの対象アイテムの在庫数のみを更新
+      const updateItemQty = (item: InventoryItem): InventoryItem => {
+        if (item.barcode !== adjustTarget.barcode) return item;
+        const updatedStoreQuantities = {
+          ...item.store_quantities,
+          [adjustTarget.storeName]: newQtyNum,
+        };
+        const updatedTotal = Object.values(updatedStoreQuantities).reduce((a, b) => a + b, 0);
+        return {
+          ...item,
+          store_quantities: updatedStoreQuantities,
+          total_quantity: updatedTotal,
+        };
+      };
+
+      setCategorizedInventory((prev) => {
+        const next = { ...prev };
+        Object.keys(next).forEach((catKey) => {
+          next[catKey] = next[catKey].map(updateItemQty);
+        });
+        return next;
+      });
+
+      setUngroupedItems((prev) => prev.map(updateItemQty));
+
       alert(`${adjustTarget.storeName} の在庫を ${adjustTarget.currentQty}個 から ${newQtyNum}個 に調整しました（増減: ${diffQuantity > 0 ? `+${diffQuantity}` : diffQuantity}個）。`);
       setAdjustTarget(null);
       setNewQuantityInput('');
-      fetchInventory();
     } catch (error: any) {
       alert('在庫調整エラー: ' + error.message);
     }
@@ -282,7 +303,7 @@ export default function InventoryPage() {
               type="button"
               key={store} 
               onClick={(e) => {
-                e.stopPropagation(); // 親要素の開閉イベントが暴発するのを防ぐ
+                e.stopPropagation();
                 setAdjustTarget({ barcode: item.barcode, storeName: store, currentQty: qty, itemName: item.name });
                 setNewQuantityInput(String(qty));
               }}
