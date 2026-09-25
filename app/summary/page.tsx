@@ -148,8 +148,22 @@ export default function SummaryPage() {
     }
   };
 
+  const getItemMonthStr = (createdAt: string) => {
+    if (!createdAt) return '';
+    try {
+      const date = new Date(createdAt);
+      if (isNaN(date.getTime())) return createdAt.substring(0, 7);
+      const jstDate = new Date(date.getTime() + (9 * 60 * 60 * 1000));
+      return jstDate.toISOString().substring(0, 7);
+    } catch (e) {
+      return createdAt.substring(0, 7);
+    }
+  };
+
+  // 購入合計: 手動登録された購入データ + 履歴（historyList）の「カパス（または検索店舗）」かつ「入庫」の金額を合算
   const totalPurchaseAmount = useMemo(() => {
-    return purchases
+    // 1. material_purchases テーブルの合計
+    const manualPurchaseSum = purchases
       .filter((item) => {
         const itemMonthStr = item.date ? item.date.substring(0, 7) : '';
         const matchMonth = !selectedMonth || itemMonthStr === selectedMonth;
@@ -163,19 +177,29 @@ export default function SummaryPage() {
         return true;
       })
       .reduce((sum, item) => sum + Number(item.amount), 0);
-  }, [purchases, selectedMonth, searchStore]);
 
-  const getItemMonthStr = (createdAt: string) => {
-    if (!createdAt) return '';
-    try {
-      const date = new Date(createdAt);
-      if (isNaN(date.getTime())) return createdAt.substring(0, 7);
-      const jstDate = new Date(date.getTime() + (9 * 60 * 60 * 1000));
-      return jstDate.toISOString().substring(0, 7);
-    } catch (e) {
-      return createdAt.substring(0, 7);
-    }
-  };
+    // 2. historyList テーブルの「入庫」合計（店舗指定が空の場合は「カパス」対象）
+    const targetStore = searchStore.trim() !== '' ? searchStore.trim() : 'カパス';
+    const historyInboundSum = historyList
+      .filter((item) => {
+        if (item.type !== '入庫') return false;
+
+        const itemMonthStr = getItemMonthStr(item.created_at);
+        const matchMonth = !selectedMonth || itemMonthStr === selectedMonth;
+        if (!matchMonth) return false;
+
+        const matchStore = item.store_name && item.store_name.toLowerCase().includes(targetStore.toLowerCase());
+        return matchStore;
+      })
+      .reduce((sum, item) => {
+        const amount = item.total_amount !== undefined && item.total_amount !== null 
+          ? Number(item.total_amount) 
+          : (Number(item.unit_price || 0) * item.quantity);
+        return sum + amount;
+      }, 0);
+
+    return manualPurchaseSum + historyInboundSum;
+  }, [purchases, historyList, selectedMonth, searchStore]);
 
   // 3. 担当別合計金額の計算（天野・佐々木・宇治のみ対象。店舗フィルター連動）
   const userSummary = useMemo(() => {
@@ -400,7 +424,7 @@ export default function SummaryPage() {
                     <span className="font-bold text-gray-800">{m.name}</span>
                     <span className="ml-2 text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-bold">{m.type}</span>
                   </div>
- &nbsp;                 <span className="font-bold">数量: {m.quantity}個 (¥{m.totalAmount.toLocaleString()})</span>
+                  <span className="font-bold">数量: {m.quantity}個 (¥{m.totalAmount.toLocaleString()})</span>
                 </div>
               ))}
             </div>
