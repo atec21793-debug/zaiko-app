@@ -58,12 +58,12 @@ export default function SummaryPage() {
   const fetchData = async () => {
     setLoading(true);
     
-    // 製品マスタ取得（単価 price も取得）
+    // 製品マスタ取得（単価 unit_price / price を取得）
     const { data: prodData } = await supabase.from('products').select('*');
     const map: { [barcode: string]: { name: string; price?: number } } = {};
     if (prodData) {
       prodData.forEach((p) => {
-        map[p.barcode] = { name: p.name, price: Number(p.price || p.unit_price || p.cost || 0) };
+        map[p.barcode] = { name: p.name, price: Number(p.unit_price || p.price || p.cost || 0) };
       });
     }
     setProductMap(map);
@@ -160,9 +160,9 @@ export default function SummaryPage() {
     }
   };
 
-  // 購入合計: 手動登録の購入データ + 履歴（historyList）のカパス入庫（または絞り込み店舗の入庫）の金額を合算
+  // 購入合計: 手動登録の購入データ + 履歴（historyList）の入庫金額の全合算
   const totalPurchaseAmount = useMemo(() => {
-    // 1. material_purchases テーブルの合計
+    // 1. material_purchases（手動登録）の合計
     const manualPurchaseSum = purchases
       .filter((item) => {
         const itemMonthStr = item.date ? item.date.substring(0, 7) : '';
@@ -178,12 +178,9 @@ export default function SummaryPage() {
       })
       .reduce((sum, item) => sum + Number(item.amount), 0);
 
-    // 2. historyList テーブルの「入庫」合計（店舗絞り込みがない場合は「カパス」を対象）
-    const targetStore = searchStore.trim() !== '' ? searchStore.trim().toLowerCase() : 'カパス';
-
+    // 2. historyList テーブルの「入庫」合計（製品マスタの単価フォールバック機能付き）
     const historyInboundSum = historyList
       .filter((item) => {
-        // 「入庫」「購入」「仕入れ」「入庫（カパス）」等の表記揺れを許容
         const itemType = String(item.type || '');
         const isInbound = itemType.includes('入庫') || itemType.includes('購入') || itemType.includes('仕入');
         if (!isInbound) return false;
@@ -192,11 +189,13 @@ export default function SummaryPage() {
         const matchMonth = !selectedMonth || itemMonthStr === selectedMonth;
         if (!matchMonth) return false;
 
-        // 店舗判定: store_name, store, user_name, memo 等のあらゆるフィールドから判定
-        const storeField = String(item.store_name || item.store || item.memo || '').toLowerCase();
-        const matchStore = storeField.includes(targetStore) || (targetStore === 'カパス' && storeField === '');
-        
-        return matchStore;
+        if (searchStore.trim() !== '') {
+          const storeField = String(item.store_name || item.store || item.memo || '').toLowerCase();
+          const matchStore = storeField.includes(searchStore.trim().toLowerCase());
+          if (!matchStore) return false;
+        }
+
+        return true;
       })
       .reduce((sum, item) => {
         let amount = 0;
@@ -206,9 +205,8 @@ export default function SummaryPage() {
           amount = Number(item.total_amount);
         } else if (item.unit_price !== undefined && item.unit_price !== null && Number(item.unit_price) > 0) {
           amount = Number(item.unit_price) * qty;
-        } else if (item.price !== undefined && item.price !== null && Number(item.price) > 0) {
-          amount = Number(item.price) * qty;
         } else {
+          // 履歴に単価がない場合は製品マスタの単価を使用
           const prod = productMap[item.barcode];
           const unitPrice = prod?.price || 0;
           amount = unitPrice * qty;
@@ -234,7 +232,6 @@ export default function SummaryPage() {
         const matchMonth = !selectedMonth || itemMonthStr === selectedMonth;
         if (!matchMonth) return false;
         
-        // 対象ユーザー（天野・佐々木・宇治）のみ集計する
         if (!['天野', '佐々木', '宇治'].includes(item.user_name)) return false;
 
         if (searchStore.trim() !== '') {
