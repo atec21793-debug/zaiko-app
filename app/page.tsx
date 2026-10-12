@@ -39,7 +39,7 @@ export default function Home() {
             {menuItems[4].name}
           </Link>
           <Link href="/personal/佐々木" className="bg-gray-800 text-white h-24 flex items-center justify-center rounded-xl text-lg font-bold shadow-lg">
-            佐々木の手元
+            佐々木
           </Link>
         </div>
 
