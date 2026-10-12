@@ -141,7 +141,7 @@ export default function PersonalInventoryPage() {
             href="/" 
             className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg shadow-sm font-bold text-sm transition"
           >
-            ホームへ戻る
+            ホーム
           </Link>
         </div>
         <hr className="mb-6" />
@@ -190,7 +190,7 @@ export default function PersonalInventoryPage() {
                             : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                         }`}
                       >
-                        消費する
+                        消費
                       </button>
                     </div>
                   </div>
