@@ -1,0 +1,206 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { supabase } from '../../lib/supabaseClient'; // パスは適宜調整してください
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+
+type InventoryItem = {
+  barcode: string;
+  name: string;
+  model_number: string;
+};
+
+export default function PersonalInventoryPage() {
+  const params = useParams();
+  const userName = decodeURIComponent(params.name as string); // '天野', '佐々木', '宇治'
+
+  const [products, setProducts] = useState<InventoryItem[]>([]);
+  const [personalStock, setPersonalStock] = useState<{ [barcode: string]: number }>({});
+  const [loading, setLoading] = useState<boolean>(true);
+  const [searchTerm, setSearchTerm] = useState<string>('');
+
+  useEffect(() => {
+    if (userName) {
+      fetchPersonalData();
+    }
+  }, [userName]);
+
+  const fetchPersonalData = async () => {
+    setLoading(true);
+    try {
+      // 1. 製品マスターの取得
+      const { data: prodData, error: prodError } = await supabase.from('products').select('*');
+      if (prodError) throw prodError;
+      setProducts(prodData || []);
+
+      // 2. 該当ユーザーの履歴（出庫・消費）を全て取得
+      const { data: histData, error: histError } = await supabase
+        .from('history')
+        .select('*')
+        .eq('user_name', userName);
+
+      if (histError) throw histError;
+
+      // 3. 材料ごとに「出庫（プラス）」と「消費（マイナス）」を計算して個人の手元在庫を算出
+      const stockMap: { [barcode: string]: number } = {};
+
+      histData?.forEach((item) => {
+        const barcode = item.barcode;
+        const qty = Number(item.quantity) || 0;
+
+        if (!stockMap[barcode]) {
+          stockMap[barcode] = 0;
+        }
+
+        if (item.type === '出庫') {
+          // 出庫＝倉庫から自分の手元に持ち出した（増える）
+          stockMap[barcode] += qty;
+        } else if (item.type === '消費' || item.type === '使用') {
+          // 消費＝手元の材料を現場で使った（減る）
+          stockMap[barcode] -= qty;
+        }
+      });
+
+      setPersonalStock(stockMap);
+    } catch (error) {
+      console.error('データ取得エラー:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 「消費」ボタンを押したときの処理
+  const handleConsumeItem = async (item: InventoryItem) => {
+    const currentQty = personalStock[item.barcode] || 0;
+    if (currentQty <= 0) {
+      alert('現在、手元に在庫がありません。');
+      return;
+    }
+
+    const qtyStr = prompt(`${item.name} をいくつ消費（使用）しましたか？（現在の持ち出し数: ${currentQty}）`, '1');
+    if (!qtyStr) return;
+    const qty = parseInt(qtyStr, 10);
+
+    if (isNaN(qty) || qty <= 0) {
+      alert('有効な数量を入力してください。');
+      return;
+    }
+
+    if (qty > currentQty) {
+      alert(`手元の在庫数（${currentQty}個）を超える数量は消費できません。`);
+      return;
+    }
+
+    try {
+      // 単価の取得（productsマスターまたはunit_pricesから）
+      const { data: prodData } = await supabase
+        .from('products')
+        .select('unit_price')
+        .eq('barcode', item.barcode)
+        .single();
+
+      const unitPrice = prodData?.unit_price || 0;
+      const totalAmount = unitPrice * qty;
+
+      // 「消費」として履歴に記録（user_nameに個人の名前を紐付ける）
+      const { error } = await supabase.from('history').insert([
+        {
+          barcode: item.barcode,
+          store_name: '個人手元', // または任意の場所
+          type: '消費',
+          quantity: qty,
+          unit_price: unitPrice,
+          total_amount: totalAmount,
+          user_name: userName,
+        },
+      ]);
+
+      if (error) throw error;
+
+      alert(`${userName} さんが ${item.name} を ${qty}個 消費しました。`);
+      fetchPersonalData(); // データを再読み込みして数値を更新
+    } catch (error: any) {
+      alert('エラーが発生しました: ' + error.message);
+    }
+  };
+
+  const filteredProducts = products.filter(
+    (item) =>
+      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.barcode.includes(searchTerm) ||
+      item.model_number.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
+      <div className="max-w-4xl mx-auto">
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-2xl font-bold text-gray-800">{userName} さんの手元在庫</h1>
+          <Link 
+            href="/" 
+            className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg shadow-sm font-bold text-sm transition"
+          >
+            ホームへ戻る
+          </Link>
+        </div>
+        <hr className="mb-6" />
+
+        <div className="mb-6">
+          <input
+            type="text"
+            placeholder="材料名、JAN、型番で検索..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-base"
+          />
+        </div>
+
+        {loading ? (
+          <div className="text-center py-12 text-gray-500">読み込み中...</div>
+        ) : (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="p-4 bg-gray-100 border-b border-gray-200 font-bold text-gray-700 text-sm grid grid-cols-12 gap-2">
+              <div className="col-span-6">材料名 / 型番</div>
+              <div className="col-span-3 text-center">手元在庫数</div>
+              <div className="col-span-3 text-center">操作</div>
+            </div>
+            <div className="divide-y divide-gray-100">
+              {filteredProducts.map((item) => {
+                const stockCount = personalStock[item.barcode] || 0;
+                // 在庫が0のものは非表示にする場合はここで弾くことも可能ですが、全件表示して0のものはボタンを薄くする形にしています
+                return (
+                  <div key={item.barcode} className="p-4 grid grid-cols-12 gap-2 items-center hover:bg-gray-50 transition">
+                    <div className="col-span-6">
+                      <div className="font-semibold text-gray-800 text-sm">{item.name}</div>
+                      <div className="text-xs text-gray-500">型番: {item.model_number || 'なし'} / JAN: {item.barcode}</div>
+                    </div>
+                    <div className="col-span-3 text-center">
+                      <span className={`text-base font-bold ${stockCount > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
+                        {stockCount} 個
+                      </span>
+                    </div>
+                    <div className="col-span-3 text-center">
+                      <button
+                        type="button"
+                        onClick={() => handleConsumeItem(item)}
+                        disabled={stockCount <= 0}
+                        className={`px-4 py-2 rounded-lg font-bold text-xs shadow-sm transition cursor-pointer ${
+                          stockCount > 0 
+                            ? 'bg-orange-600 hover:bg-orange-700 text-white' 
+                            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                        }`}
+                      >
+                        消費する
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

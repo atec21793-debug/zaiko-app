@@ -368,6 +368,29 @@ export default function InventoryPage() {
         </div>
         <hr className="mb-6" />
 
+        {/* ─── 天野・佐々木・宇治のボタン（検索窓の上） ─── */}
+        <div className="flex gap-2 mb-4">
+          <Link 
+            href="/user/天野" 
+            className="flex-1 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg font-bold text-xs sm:text-sm text-center transition shadow-2xs"
+          >
+            天野のページ
+          </Link>
+          <Link 
+            href="/user/佐々木" 
+            className="flex-1 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg font-bold text-xs sm:text-sm text-center transition shadow-2xs"
+          >
+            佐々木のページ
+          </Link>
+          <Link 
+            href="/user/宇治" 
+            className="flex-1 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg font-bold text-xs sm:text-sm text-center transition shadow-2xs"
+          >
+            宇治のページ
+          </Link>
+        </div>
+        {/* ────────────────────────────────────────────── */}
+
         <div className="mb-6">
           <input
             type="text"
