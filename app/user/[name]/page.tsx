@@ -206,7 +206,7 @@ export default function PersonalInventoryPage() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <div className="p-4 bg-gray-100 border-b border-gray-200 font-bold text-gray-700 text-sm grid grid-cols-12 gap-2">
               <div className="col-span-6">材料名 / 型番</div>
-              <div className="col-span-3 text-center">手元在庫数 (クリックで編集)</div>
+              <div className="col-span-3 text-center">手元在庫数</div>
               <div className="col-span-3 text-center">操作</div>
             </div>
             <div className="divide-y divide-gray-100">
@@ -227,7 +227,7 @@ export default function PersonalInventoryPage() {
                         }`}
                         title="クリックして数値を変更"
                       >
-                        {stockCount} 個 ✏️
+                        {stockCount} 個 
                       </button>
                     </div>
                     <div className="col-span-3 text-center">
