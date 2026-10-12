@@ -168,7 +168,6 @@ export default function PersonalInventoryPage() {
             <div className="divide-y divide-gray-100">
               {filteredProducts.map((item) => {
                 const stockCount = personalStock[item.barcode] || 0;
-                // 在庫が0のものは非表示にする場合はここで弾くことも可能ですが、全件表示して0のものはボタンを薄くする形にしています
                 return (
                   <div key={item.barcode} className="p-4 grid grid-cols-12 gap-2 items-center hover:bg-gray-50 transition">
                     <div className="col-span-6">
@@ -185,9 +184,9 @@ export default function PersonalInventoryPage() {
                         type="button"
                         onClick={() => handleConsumeItem(item)}
                         disabled={stockCount <= 0}
-                        className={`px-4 py-2 rounded-lg font-bold text-xs shadow-sm transition cursor-pointer ${
+                        className={`px-4 py-2 rounded-lg font-bold text-xs shadow-sm transition ${
                           stockCount > 0 
-                            ? 'bg-orange-600 hover:bg-orange-700 text-white' 
+                            ? 'bg-orange-600 hover:bg-orange-700 text-white cursor-pointer' 
                             : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                         }`}
                       >
