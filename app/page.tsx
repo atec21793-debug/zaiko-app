@@ -31,7 +31,6 @@ export default function Home() {
       </div>
 
       {/* 在庫一覧 (左) と 集計 (右) の行 */}
-      {/* その下にそれぞれ「佐々木」「管理」を配置して2カラムを維持 */}
       <div className="grid grid-cols-2 gap-4">
         {/* 左列：在庫一覧 ＆ 佐々木 */}
         <div className="flex flex-col gap-4">
@@ -43,13 +42,10 @@ export default function Home() {
           </Link>
         </div>
 
-        {/* 右列：集計 ＆ 管理 */}
+        {/* 右列：集計 のみ */}
         <div className="flex flex-col gap-4">
           <Link href={menuItems[5].href} className={`${menuItems[5].color} text-white h-24 flex items-center justify-center rounded-xl text-lg font-bold shadow-lg w-full`}>
             {menuItems[5].name}
-          </Link>
-          <Link href="/manage" className="bg-gray-800 text-white h-24 flex items-center justify-center rounded-xl text-lg font-bold shadow-lg w-full">
-            管理
           </Link>
         </div>
       </div>
