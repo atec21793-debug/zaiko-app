@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabaseClient'; // パスは適宜調整してください
+import { supabase } from '../../lib/supabaseClient';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 
@@ -11,6 +11,46 @@ type InventoryItem = {
   model_number: string;
 };
 
+// カテゴリ（グループ）の定義と除外キーワード
+const CATEGORIES = [
+  { 
+    key: 'ダクト', 
+    label: 'ダクト類', 
+    matchName: 'ダクト', 
+    exclude: ['77ダクト', 'スリムダクト', '90ダクト'] 
+  },
+  { 
+    key: 'ジョイント', 
+    label: 'ジョイント', 
+    matchName: 'ジョイント', 
+    exclude: ['77ジョイント', '90ジョイント'] 
+  },
+  { 
+    key: 'L頭', 
+    label: 'L頭', 
+    matchName: 'L頭', 
+    exclude: [] 
+  },
+  { 
+    key: '頭', 
+    label: '頭', 
+    matchName: '頭', 
+    exclude: ['L頭', '77頭', '頭W(後付)'] // 「頭」単体に一致するもの、L頭や77頭などを分離するため
+  },
+  { 
+    key: '90', 
+    label: '90', 
+    matchName: '90', 
+    exclude: ['立面90', '90ダクト', '90ジョイント', '9090'] 
+  },
+  { 
+    key: '45', 
+    label: '45', 
+    matchName: '45', 
+    exclude: [] 
+  },
+];
+
 export default function PersonalInventoryPage() {
   const params = useParams();
   const userName = decodeURIComponent(params.name as string); // '天野', '佐々木', '宇治'
@@ -19,6 +59,7 @@ export default function PersonalInventoryPage() {
   const [personalStock, setPersonalStock] = useState<{ [barcode: string]: number }>({});
   const [loading, setLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [expandedGroups, setExpandedGroups] = useState<{ [key: string]: boolean }>({});
 
   useEffect(() => {
     if (userName) {
@@ -29,12 +70,10 @@ export default function PersonalInventoryPage() {
   const fetchPersonalData = async () => {
     setLoading(true);
     try {
-      // 1. 製品マスターの取得
       const { data: prodData, error: prodError } = await supabase.from('products').select('*');
       if (prodError) throw prodError;
       setProducts(prodData || []);
 
-      // 2. 該当ユーザーの履歴（出庫・消費・調整など）を全て取得
       const { data: histData, error: histError } = await supabase
         .from('history')
         .select('*')
@@ -42,7 +81,6 @@ export default function PersonalInventoryPage() {
 
       if (histError) throw histError;
 
-      // 3. 材料ごとに「出庫（プラス）」と「消費（マイナス）」等を計算して個人の手元在庫を算出
       const stockMap: { [barcode: string]: number } = {};
 
       histData?.forEach((item) => {
@@ -68,7 +106,7 @@ export default function PersonalInventoryPage() {
     }
   };
 
-  // 「消費」ボタンを押したときの処理
+  // 「消費」ボタン
   const handleConsumeItem = async (item: InventoryItem) => {
     const currentQty = personalStock[item.barcode] || 0;
     if (currentQty <= 0) {
@@ -121,11 +159,11 @@ export default function PersonalInventoryPage() {
     }
   };
 
-  // 手元在庫数を直接編集して上書きするときの処理
+  // 在庫数の直接編集
   const handleEditStock = async (item: InventoryItem) => {
     const currentQty = personalStock[item.barcode] || 0;
     const inputStr = prompt(`${item.name} の手元在庫数をいくつに修正しますか？`, String(currentQty));
-    if (inputStr === null) return; // キャンセル
+    if (inputStr === null) return;
 
     const newQty = parseInt(inputStr, 10);
     if (isNaN(newQty) || newQty < 0) {
@@ -134,7 +172,7 @@ export default function PersonalInventoryPage() {
     }
 
     const diff = newQty - currentQty;
-    if (diff === 0) return; // 変更なし
+    if (diff === 0) return;
 
     try {
       const { data: prodData } = await supabase
@@ -169,12 +207,50 @@ export default function PersonalInventoryPage() {
     }
   };
 
-  const filteredProducts = products.filter(
-    (item) =>
-      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.barcode.includes(searchTerm) ||
-      item.model_number.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const toggleGroup = (key: string) => {
+    setExpandedGroups((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  // 商品がどのカテゴリに属するか、除外条件も考慮して判定
+  const categorizeProduct = (item: InventoryItem) => {
+    for (const cat of CATEGORIES) {
+      if (item.name.includes(cat.matchName)) {
+        // 除外キーワードにヒットするかチェック
+        const isExcluded = cat.exclude.some((ex) => item.name.includes(ex));
+        if (!isExcluded) {
+          return cat.key;
+        }
+      }
+    }
+    return 'その他';
+  };
+
+  // データの分類とグループ化
+  const categorized: Record<string, InventoryItem[]> = { その他: [] };
+  CATEGORIES.forEach((cat) => {
+    categorized[cat.key] = [];
+  });
+
+  const assignedBarcodes = new Set<string>();
+
+  products.forEach((item) => {
+    const catKey = categorizeProduct(item);
+    if (categorized[catKey]) {
+      categorized[catKey].push(item);
+      assignedBarcodes.add(item.barcode);
+    } else {
+      categorized['その他'].push(item);
+    }
+  });
+
+  // 検索フィルタリング
+  const filterList = (list: InventoryItem[]) =>
+    list.filter(
+      (item) =>
+        item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.barcode.includes(searchTerm) ||
+        item.model_number.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
@@ -190,6 +266,7 @@ export default function PersonalInventoryPage() {
         </div>
         <hr className="mb-6" />
 
+        {/* 検索バー */}
         <div className="mb-6">
           <input
             type="text"
@@ -203,51 +280,136 @@ export default function PersonalInventoryPage() {
         {loading ? (
           <div className="text-center py-12 text-gray-500">読み込み中...</div>
         ) : (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="p-4 bg-gray-100 border-b border-gray-200 font-bold text-gray-700 text-sm grid grid-cols-12 gap-2">
-              <div className="col-span-6">材料名 / 型番</div>
-              <div className="col-span-3 text-center">手元在庫数</div>
-              <div className="col-span-3 text-center">操作</div>
-            </div>
-            <div className="divide-y divide-gray-100">
-              {filteredProducts.map((item) => {
-                const stockCount = personalStock[item.barcode] || 0;
-                return (
-                  <div key={item.barcode} className="p-4 grid grid-cols-12 gap-2 items-center hover:bg-gray-50 transition">
-                    <div className="col-span-6">
-                      <div className="font-semibold text-gray-800 text-sm">{item.name}</div>
-                      <div className="text-xs text-gray-500">型番: {item.model_number || 'なし'} / JAN: {item.barcode}</div>
-                    </div>
-                    <div className="col-span-3 text-center">
-                      <button
-                        type="button"
-                        onClick={() => handleEditStock(item)}
-                        className={`text-base font-bold px-2 py-1 rounded hover:bg-gray-100 transition cursor-pointer ${
-                          stockCount > 0 ? 'text-gray-900' : 'text-gray-400'
-                        }`}
-                        title="クリックして数値を変更"
-                      >
-                        {stockCount} 個 
-                      </button>
-                    </div>
-                    <div className="col-span-3 text-center">
-                      <button
-                        type="button"
-                        onClick={() => handleConsumeItem(item)}
-                        disabled={stockCount <= 0}
-                        className={`px-3 py-1.5 rounded-lg font-bold text-xs shadow-sm transition ${
-                          stockCount > 0 
-                            ? 'bg-gray-100 hover:bg-gray-200 text-gray-700 cursor-pointer' 
-                            : 'bg-gray-100 text-gray-300 cursor-not-allowed'
-                        }`}
-                      >
-                        消費
-                      </button>
-                    </div>
+          <div className="space-y-3">
+            {/* 各カテゴリのリスト表示 */}
+            {CATEGORIES.map((cat) => {
+              const items = categorized[cat.key] || [];
+              const filteredItems = filterList(items);
+              const isExpanded = !!expandedGroups[cat.key];
+
+              if (items.length === 0 || (searchTerm && filteredItems.length === 0)) {
+                return null;
+              }
+
+              // グループ全体の個人在庫合計
+              const groupTotalStock = items.reduce((acc, item) => acc + (personalStock[item.barcode] || 0), 0);
+
+              return (
+                <div key={cat.key} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                  <div
+                    onClick={() => toggleGroup(cat.key)}
+                    className="p-4 sm:p-5 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors select-none"
+                  >
+                    <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                      {cat.label} 
+                      <span className="text-xs text-gray-400 font-normal">({items.length}件)</span>
+                      <span className="ml-2 px-2.5 py-0.5 bg-blue-50 text-blue-700 text-xs font-bold rounded-full border border-blue-100">
+                        合計: {groupTotalStock}個
+                      </span>
+                    </h2>
+                    <span className={`text-gray-400 transform transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>▼</span>
                   </div>
-                );
-              })}
-            </div>
+
+                  {isExpanded && (
+                    <div className="border-t border-gray-100 bg-white divide-y divide-gray-100">
+                      {filteredItems.map((item) => {
+                        const stockCount = personalStock[item.barcode] || 0;
+                        return (
+                          <div key={item.barcode} className="p-4 pl-6 sm:pl-8 grid grid-cols-12 gap-2 items-center hover:bg-gray-50 transition">
+                            <div className="col-span-6">
+                              <div className="font-semibold text-gray-800 text-sm">{item.name}</div>
+                              <div className="text-xs text-gray-500">型番: {item.model_number || 'なし'} / JAN: {item.barcode}</div>
+                            </div>
+                            <div className="col-span-3 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleEditStock(item)}
+                                className={`text-base font-bold px-2 py-1 rounded hover:bg-gray-100 transition cursor-pointer ${
+                                  stockCount > 0 ? 'text-gray-900' : 'text-gray-400'
+                                }`}
+                                title="クリックして数値を変更"
+                              >
+                                {stockCount} 個
+                              </button>
+                            </div>
+                            <div className="col-span-3 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleConsumeItem(item)}
+                                disabled={stockCount <= 0}
+                                className={`px-3 py-1.5 rounded-lg font-bold text-xs shadow-sm transition ${
+                                  stockCount > 0 
+                                    ? 'bg-gray-100 hover:bg-gray-200 text-gray-700 cursor-pointer' 
+                                    : 'bg-gray-100 text-gray-300 cursor-not-allowed'
+                                }`}
+                              >
+                                消費
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* その他のカテゴリ */}
+            {categorized['その他'].length > 0 && filterList(categorized['その他']).length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div
+                  onClick={() => toggleGroup('その他')}
+                  className="p-4 sm:p-5 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors select-none"
+                >
+                  <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                    その他 <span className="text-xs text-gray-400 font-normal">({categorized['その他'].length}件)</span>
+                  </h2>
+                  <span className={`text-gray-400 transform transition-transform duration-200 ${expandedGroups['その他'] ? 'rotate-180' : ''}`}>▼</span>
+                </div>
+
+                {expandedGroups['その他'] && (
+                  <div className="border-t border-gray-100 bg-white divide-y divide-gray-100">
+                    {filterList(categorized['その他']).map((item) => {
+                      const stockCount = personalStock[item.barcode] || 0;
+                      return (
+                        <div key={item.barcode} className="p-4 pl-6 sm:pl-8 grid grid-cols-12 gap-2 items-center hover:bg-gray-50 transition">
+                          <div className="col-span-6">
+                            <div className="font-semibold text-gray-800 text-sm">{item.name}</div>
+                            <div className="text-xs text-gray-500">型番: {item.model_number || 'なし'} / JAN: {item.barcode}</div>
+                          </div>
+                          <div className="col-span-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleEditStock(item)}
+                              className={`text-base font-bold px-2 py-1 rounded hover:bg-gray-100 transition cursor-pointer ${
+                                stockCount > 0 ? 'text-gray-900' : 'text-gray-400'
+                              }`}
+                            >
+                              {stockCount} 個
+                            </button>
+                          </div>
+                          <div className="col-span-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleConsumeItem(item)}
+                              disabled={stockCount <= 0}
+                              className={`px-3 py-1.5 rounded-lg font-bold text-xs shadow-sm transition ${
+                                stockCount > 0 
+                                  ? 'bg-gray-100 hover:bg-gray-200 text-gray-700 cursor-pointer' 
+                                  : 'bg-gray-100 text-gray-300 cursor-not-allowed'
+                              }`}
+                            >
+                              消費
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
