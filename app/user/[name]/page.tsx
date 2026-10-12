@@ -175,7 +175,7 @@ export default function PersonalInventoryPage() {
                       <div className="text-xs text-gray-500">型番: {item.model_number || 'なし'} / JAN: {item.barcode}</div>
                     </div>
                     <div className="col-span-3 text-center">
-                      <span className={`text-base font-bold ${stockCount > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
+                      <span className={`text-base font-bold ${stockCount > 0 ? 'text-gray-900' : 'text-gray-400'}`}>
                         {stockCount} 個
                       </span>
                     </div>
@@ -184,10 +184,10 @@ export default function PersonalInventoryPage() {
                         type="button"
                         onClick={() => handleConsumeItem(item)}
                         disabled={stockCount <= 0}
-                        className={`px-4 py-2 rounded-lg font-bold text-xs shadow-sm transition ${
+                        className={`px-3 py-1.5 rounded-lg font-bold text-xs shadow-sm transition ${
                           stockCount > 0 
-                            ? 'bg-orange-600 hover:bg-orange-700 text-white cursor-pointer' 
-                            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                            ? 'bg-gray-100 hover:bg-gray-200 text-gray-700 cursor-pointer' 
+                            : 'bg-gray-100 text-gray-300 cursor-not-allowed'
                         }`}
                       >
                         消費
