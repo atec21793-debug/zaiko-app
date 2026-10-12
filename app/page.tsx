@@ -11,7 +11,7 @@ export default function Home() {
   ];
 
   return (
-    <main className="min-h-screen p-4 bg-gray-50 max-w-lg mx-auto">
+    <main className="min-h-screen p-4 bg-gray-50">
       <h1 className="text-xl font-bold mb-6 text-center text-gray-800">在庫管理</h1>
       
       <div className="grid grid-cols-2 gap-4 mb-4">
