@@ -11,7 +11,7 @@ export default function Home() {
   ];
 
   return (
-    <main className="min-h-screen p-4 bg-gray-50">
+    <main className="min-h-screen p-4 bg-gray-50 max-w-lg mx-auto">
       <h1 className="text-xl font-bold mb-6 text-center text-gray-800">在庫管理</h1>
       
       <div className="grid grid-cols-2 gap-4 mb-4">
@@ -38,7 +38,7 @@ export default function Home() {
           <Link href={menuItems[4].href} className={`${menuItems[4].color} text-white h-24 flex items-center justify-center rounded-xl text-lg font-bold shadow-lg w-full`}>
             {menuItems[4].name}
           </Link>
-          <Link href="/personal/佐々木" className="bg-gray-800 text-white h-24 flex items-center justify-center rounded-xl text-lg font-bold shadow-lg w-full">
+          <Link href="/user/佐々木" className="bg-gray-800 text-white h-24 flex items-center justify-center rounded-xl text-lg font-bold shadow-lg w-full">
             佐々木
           </Link>
         </div>
