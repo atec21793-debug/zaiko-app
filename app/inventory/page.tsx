@@ -372,21 +372,21 @@ export default function InventoryPage() {
         <div className="flex gap-2 mb-4">
           <Link 
             href="/user/天野" 
-            className="flex-1 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg font-bold text-xs sm:text-sm text-center transition shadow-2xs"
+            className="flex-1 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg shadow-sm font-bold text-xs sm:text-sm text-center transition"
           >
-            天野のページ
+            天野
           </Link>
           <Link 
             href="/user/佐々木" 
-            className="flex-1 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg font-bold text-xs sm:text-sm text-center transition shadow-2xs"
+            className="flex-1 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg shadow-sm font-bold text-xs sm:text-sm text-center transition"
           >
-            佐々木のページ
+            佐々木
           </Link>
           <Link 
             href="/user/宇治" 
-            className="flex-1 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg font-bold text-xs sm:text-sm text-center transition shadow-2xs"
+            className="flex-1 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg shadow-sm font-bold text-xs sm:text-sm text-center transition"
           >
-            宇治のページ
+            宇治
           </Link>
         </div>
         {/* ────────────────────────────────────────────── */}
