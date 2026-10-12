@@ -8,6 +8,9 @@ type Product = {
   barcode: string;
   name: string;
   model_number: string;
+  unit_price?: number;
+  price?: number;
+  cost?: number;
 };
 
 export default function InboundPage() {
@@ -121,21 +124,25 @@ export default function InboundPage() {
       return;
     }
 
-    // 選択された日付に現在の時間を付与して保存 (YYYY-MM-DDTHH:mm:ss形式など)
-    // 既存データの時間に合わせるため、現在の時刻を維持して日付だけを差し替えるか、指定日の現在時刻にする
+    // 選択された日付に現在の時間を付与して保存
     const now = new Date();
     const targetDate = new Date(inboundDate);
     targetDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
 
-    // 1. 履歴追加（指定された日付を created_at として保存）
+    // 商品マスタから単価・金額を事前に取得
+    const matchedProd = productsList.find((p) => p.barcode === barcode);
+    const unitPrice = Number(matchedProd?.unit_price || matchedProd?.price || matchedProd?.cost || 0);
+    const totalAmount = unitPrice * qtyNum;
+
+    // 1. 履歴追加（単価と合計金額をセットして保存）
     const { error: histErr } = await supabase.from('history').insert({
       barcode,
       store_name: storeName,
       user_name: '-',
       type: '入庫',
       quantity: qtyNum,
-      unit_price: 0,
-      total_amount: 0,
+      unit_price: unitPrice,
+      total_amount: totalAmount,
       created_at: targetDate.toISOString(),
     });
 
