@@ -12,11 +12,11 @@ export default function Home() {
 
   return (
     <main className="min-h-screen p-4 bg-gray-50">
-      <h1 className="text-xl font-bold mb-6 text-center">在庫管理</h1>
+      <h1 className="text-xl font-bold mb-6 text-center text-gray-800">在庫管理</h1>
       
       <div className="grid grid-cols-2 gap-4 mb-4">
         {menuItems.slice(0, 2).map((item) => (
-          <Link key={item.name} href={item.href} className={`${item.color} text-white h-32 flex items-center justify-center rounded-xl text-lg font-bold shadow-lg`}>
+          <Link key={item.name} href={item.href} className={`${item.color} text-white h-24 flex items-center justify-center rounded-xl text-lg font-bold shadow-lg w-full`}>
             {item.name}
           </Link>
         ))}
@@ -24,20 +24,30 @@ export default function Home() {
 
       <div className="grid grid-cols-2 gap-4 mb-4">
         {menuItems.slice(2, 4).map((item) => (
-          <Link key={item.name} href={item.href} className={`${item.color} text-white h-32 flex items-center justify-center rounded-xl text-lg font-bold shadow-lg`}>
+          <Link key={item.name} href={item.href} className={`${item.color} text-white h-24 flex items-center justify-center rounded-xl text-lg font-bold shadow-lg w-full`}>
             {item.name}
           </Link>
         ))}
       </div>
 
-      {/* 在庫一覧 と 入出庫まとめ を横並びにする */}
+      {/* 在庫一覧 (左) と 集計 (右) の行 */}
       <div className="grid grid-cols-2 gap-4">
-        <Link href={menuItems[4].href} className={`${menuItems[4].color} text-white h-24 flex items-center justify-center rounded-xl text-lg font-bold shadow-lg`}>
-          {menuItems[4].name}
-        </Link>
-        <Link href={menuItems[5].href} className={`${menuItems[5].color} text-white h-24 flex items-center justify-center rounded-xl text-lg font-bold shadow-lg`}>
-          {menuItems[5].name}
-        </Link>
+        {/* 左列：在庫一覧 ＆ 佐々木 */}
+        <div className="flex flex-col gap-4">
+          <Link href={menuItems[4].href} className={`${menuItems[4].color} text-white h-24 flex items-center justify-center rounded-xl text-lg font-bold shadow-lg w-full`}>
+            {menuItems[4].name}
+          </Link>
+          <Link href="/user/佐々木" className="bg-gray-800 text-white h-24 flex items-center justify-center rounded-xl text-lg font-bold shadow-lg w-full">
+            佐々木
+          </Link>
+        </div>
+
+        {/* 右列：集計 のみ */}
+        <div className="flex flex-col gap-4">
+          <Link href={menuItems[5].href} className={`${menuItems[5].color} text-white h-24 flex items-center justify-center rounded-xl text-lg font-bold shadow-lg w-full`}>
+            {menuItems[5].name}
+          </Link>
+        </div>
       </div>
     </main>
   );

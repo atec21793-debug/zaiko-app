@@ -376,12 +376,7 @@ export default function InventoryPage() {
           >
             天野
           </Link>
-          <Link 
-            href="/user/佐々木" 
-            className="flex-1 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg shadow-sm font-bold text-xs sm:text-sm text-center transition"
-          >
-            佐々木
-          </Link>
+          
           <Link 
             href="/user/宇治" 
             className="flex-1 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg shadow-sm font-bold text-xs sm:text-sm text-center transition"

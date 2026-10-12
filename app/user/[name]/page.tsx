@@ -34,7 +34,7 @@ export default function PersonalInventoryPage() {
       if (prodError) throw prodError;
       setProducts(prodData || []);
 
-      // 2. 該当ユーザーの履歴（出庫・消費）を全て取得
+      // 2. 該当ユーザーの履歴（出庫・消費・調整など）を全て取得
       const { data: histData, error: histError } = await supabase
         .from('history')
         .select('*')
@@ -42,7 +42,7 @@ export default function PersonalInventoryPage() {
 
       if (histError) throw histError;
 
-      // 3. 材料ごとに「出庫（プラス）」と「消費（マイナス）」を計算して個人の手元在庫を算出
+      // 3. 材料ごとに「出庫（プラス）」と「消費（マイナス）」等を計算して個人の手元在庫を算出
       const stockMap: { [barcode: string]: number } = {};
 
       histData?.forEach((item) => {
@@ -53,11 +53,9 @@ export default function PersonalInventoryPage() {
           stockMap[barcode] = 0;
         }
 
-        if (item.type === '出庫') {
-          // 出庫＝倉庫から自分の手元に持ち出した（増える）
+        if (item.type === '出庫' || item.type === '入庫' || item.type === '調整(+)') {
           stockMap[barcode] += qty;
-        } else if (item.type === '消費' || item.type === '使用') {
-          // 消費＝手元の材料を現場で使った（減る）
+        } else if (item.type === '消費' || item.type === '使用' || item.type === '調整(-)') {
           stockMap[barcode] -= qty;
         }
       });
@@ -93,7 +91,6 @@ export default function PersonalInventoryPage() {
     }
 
     try {
-      // 単価の取得（productsマスターまたはunit_pricesから）
       const { data: prodData } = await supabase
         .from('products')
         .select('unit_price')
@@ -103,11 +100,10 @@ export default function PersonalInventoryPage() {
       const unitPrice = prodData?.unit_price || 0;
       const totalAmount = unitPrice * qty;
 
-      // 「消費」として履歴に記録（user_nameに個人の名前を紐付ける）
       const { error } = await supabase.from('history').insert([
         {
           barcode: item.barcode,
-          store_name: '個人手元', // または任意の場所
+          store_name: '個人手元',
           type: '消費',
           quantity: qty,
           unit_price: unitPrice,
@@ -119,7 +115,55 @@ export default function PersonalInventoryPage() {
       if (error) throw error;
 
       alert(`${userName} さんが ${item.name} を ${qty}個 消費しました。`);
-      fetchPersonalData(); // データを再読み込みして数値を更新
+      fetchPersonalData();
+    } catch (error: any) {
+      alert('エラーが発生しました: ' + error.message);
+    }
+  };
+
+  // 手元在庫数を直接編集して上書きするときの処理
+  const handleEditStock = async (item: InventoryItem) => {
+    const currentQty = personalStock[item.barcode] || 0;
+    const inputStr = prompt(`${item.name} の手元在庫数をいくつに修正しますか？`, String(currentQty));
+    if (inputStr === null) return; // キャンセル
+
+    const newQty = parseInt(inputStr, 10);
+    if (isNaN(newQty) || newQty < 0) {
+      alert('有効な0以上の数値を入力してください。');
+      return;
+    }
+
+    const diff = newQty - currentQty;
+    if (diff === 0) return; // 変更なし
+
+    try {
+      const { data: prodData } = await supabase
+        .from('products')
+        .select('unit_price')
+        .eq('barcode', item.barcode)
+        .single();
+
+      const unitPrice = prodData?.unit_price || 0;
+      const type = diff > 0 ? '調整(+)' : '調整(-)';
+      const absDiff = Math.abs(diff);
+      const totalAmount = unitPrice * absDiff;
+
+      const { error } = await supabase.from('history').insert([
+        {
+          barcode: item.barcode,
+          store_name: '個人手元',
+          type: type,
+          quantity: absDiff,
+          unit_price: unitPrice,
+          total_amount: totalAmount,
+          user_name: userName,
+        },
+      ]);
+
+      if (error) throw error;
+
+      alert(`${item.name} の手元在庫を ${newQty}個 に更新しました。`);
+      fetchPersonalData();
     } catch (error: any) {
       alert('エラーが発生しました: ' + error.message);
     }
@@ -175,9 +219,16 @@ export default function PersonalInventoryPage() {
                       <div className="text-xs text-gray-500">型番: {item.model_number || 'なし'} / JAN: {item.barcode}</div>
                     </div>
                     <div className="col-span-3 text-center">
-                      <span className={`text-base font-bold ${stockCount > 0 ? 'text-gray-900' : 'text-gray-400'}`}>
-                        {stockCount} 個
-                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleEditStock(item)}
+                        className={`text-base font-bold px-2 py-1 rounded hover:bg-gray-100 transition cursor-pointer ${
+                          stockCount > 0 ? 'text-gray-900' : 'text-gray-400'
+                        }`}
+                        title="クリックして数値を変更"
+                      >
+                        {stockCount} 個 
+                      </button>
                     </div>
                     <div className="col-span-3 text-center">
                       <button
