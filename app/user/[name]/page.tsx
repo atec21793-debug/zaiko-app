@@ -35,13 +35,19 @@ const CATEGORIES = [
     key: '頭', 
     label: '頭', 
     matchName: '頭', 
-    exclude: ['L頭', '77頭', '頭W(後付)'] // 「頭」単体に一致するもの、L頭や77頭などを分離するため
+    exclude: ['L頭', '77頭', '頭W(後付)'] 
   },
   { 
-    key: '90', 
-    label: '90', 
+    key: '90サイズ', 
+    label: '90サイズ', 
     matchName: '90', 
     exclude: ['立面90', '90ダクト', '90ジョイント', '9090'] 
+  },
+  { 
+    key: '77サイズ', 
+    label: '77サイズ', 
+    matchName: '77', 
+    exclude: [] 
   },
   { 
     key: '45', 
@@ -49,11 +55,29 @@ const CATEGORIES = [
     matchName: '45', 
     exclude: [] 
   },
+  { 
+    key: '配管・電線・ドレン', 
+    label: '配管・電線・ドレン', 
+    matchName: '', // 特殊条件で判定
+    exclude: [] 
+  },
+  { 
+    key: 'その他パーツ', 
+    label: 'その他パーツ', 
+    matchName: '', // 特殊条件で判定
+    exclude: [] 
+  },
+  { 
+    key: '金具', 
+    label: '金具', 
+    matchName: '金具', 
+    exclude: [] 
+  },
 ];
 
 export default function PersonalInventoryPage() {
   const params = useParams();
-  const userName = decodeURIComponent(params.name as string); // '天野', '佐々木', '宇治'
+  const userName = decodeURIComponent(params.name as string);
 
   const [products, setProducts] = useState<InventoryItem[]>([]);
   const [personalStock, setPersonalStock] = useState<{ [barcode: string]: number }>({});
@@ -211,17 +235,47 @@ export default function PersonalInventoryPage() {
     setExpandedGroups((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // 商品がどのカテゴリに属するか、除外条件も考慮して判定
+  // 商品がどのカテゴリに属するかを判定
   const categorizeProduct = (item: InventoryItem) => {
+    const name = item.name;
+
+    // 1. 金具カテゴリー（名前に「金具」が含まれるもの）
+    if (name.includes('金具')) {
+      return '金具';
+    }
+
+    // 2. 配管・電線・ドレンカテゴリー
+    const pipingKeywords = ['配管2分3分', '2*1.6', '3*2.0', '3*1.6', 'ドレン'];
+    if (pipingKeywords.some((kw) => name.includes(kw))) {
+      return '配管・電線・ドレン';
+    }
+
+    // 3. その他パーツカテゴリー
+    const otherPartsKeywords = ['ウォールコーナー', 'インコーナー', 'アウトコーナー', 'スライド式', 'シーリングキャップ'];
+    if (otherPartsKeywords.some((kw) => name.includes(kw))) {
+      return 'その他パーツ';
+    }
+
+    // 4. 77サイズカテゴリー
+    if (name.includes('77')) {
+      return '77サイズ';
+    }
+
+    // 5. 90サイズカテゴリー
+    if (name.includes('90')) {
+      return '90サイズ';
+    }
+
+    // 6. その他の既存カテゴリチェック
     for (const cat of CATEGORIES) {
-      if (item.name.includes(cat.matchName)) {
-        // 除外キーワードにヒットするかチェック
-        const isExcluded = cat.exclude.some((ex) => item.name.includes(ex));
+      if (cat.matchName && name.includes(cat.matchName)) {
+        const isExcluded = cat.exclude.some((ex) => name.includes(ex));
         if (!isExcluded) {
           return cat.key;
         }
       }
     }
+
     return 'その他';
   };
 
@@ -231,13 +285,10 @@ export default function PersonalInventoryPage() {
     categorized[cat.key] = [];
   });
 
-  const assignedBarcodes = new Set<string>();
-
   products.forEach((item) => {
     const catKey = categorizeProduct(item);
     if (categorized[catKey]) {
       categorized[catKey].push(item);
-      assignedBarcodes.add(item.barcode);
     } else {
       categorized['その他'].push(item);
     }
@@ -291,9 +342,6 @@ export default function PersonalInventoryPage() {
                 return null;
               }
 
-              // グループ全体の個人在庫合計
-              const groupTotalStock = items.reduce((acc, item) => acc + (personalStock[item.barcode] || 0), 0);
-
               return (
                 <div key={cat.key} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                   <div
@@ -303,9 +351,6 @@ export default function PersonalInventoryPage() {
                     <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                       {cat.label} 
                       <span className="text-xs text-gray-400 font-normal">({items.length}件)</span>
-                      <span className="ml-2 px-2.5 py-0.5 bg-blue-50 text-blue-700 text-xs font-bold rounded-full border border-blue-100">
-                        合計: {groupTotalStock}個
-                      </span>
                     </h2>
                     <span className={`text-gray-400 transform transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>▼</span>
                   </div>
