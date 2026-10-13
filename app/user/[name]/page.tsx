@@ -41,7 +41,7 @@ const CATEGORIES = [
     key: '90サイズ', 
     label: '90サイズ', 
     matchName: '90', 
-    exclude: ['立面90', '90ダクト', '90ジョイント', '9090'] 
+    exclude: ['立面90K', '90I', '90K', '90G', '90W','90B'] 
   },
   { 
     key: '77サイズ', 
