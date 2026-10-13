@@ -38,6 +38,12 @@ const CATEGORIES = [
     exclude: ['L頭', '77頭', '頭W(後付)'] 
   },
   { 
+    key: '90', 
+    label: '90', 
+    matchName: '90', 
+    exclude: ['立面90', '90ダクト', '90ジョイント', '9090'] 
+  },
+  { 
     key: '45', 
     label: '45', 
     matchName: '45', 
@@ -232,8 +238,8 @@ export default function PersonalInventoryPage() {
       return '金具';
     }
 
-    // 2. 配管・電線・ドレンカテゴリー
-    const pipingKeywords = ['配管2分3分', '2*1.6', '3*2.0', '3*1.6', 'ドレン'];
+    // 2. 配管・電線・ドレンカテゴリー（パテ、プラブロ、ビニールテープ、コーテープを追加）
+    const pipingKeywords = ['配管2分3分', '2*1.6', '3*2.0', '3*1.6', 'ドレン', 'パテ', 'プラブロ', 'ビニールテープ', 'コーテープ'];
     if (pipingKeywords.some((kw) => name.includes(kw))) {
       return '配管・電線・ドレン';
     }
@@ -244,9 +250,13 @@ export default function PersonalInventoryPage() {
       return 'その他パーツ';
     }
 
-    // （※ 77や90を含むものはここで引っかからないため、下のダクト等の除外設定、または「その他」に流れます）
+    // 4. 90サイズカテゴリー（90W、90K、90B、90I、90Gなど）
+    const nineZeroExact = ['90W', '90K', '90B', '90I', '90G'];
+    if (nineZeroExact.some((kw) => name === kw)) {
+      return '90';
+    }
 
-    // 4. その他の既存カテゴリチェック
+    // 5. その他の既存カテゴリチェック
     for (const cat of CATEGORIES) {
       if (cat.matchName && name.includes(cat.matchName)) {
         const isExcluded = cat.exclude.some((ex) => name.includes(ex));
