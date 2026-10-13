@@ -17,7 +17,7 @@ const CATEGORIES = [
     key: 'ダクト', 
     label: 'ダクト類', 
     matchName: 'ダクト', 
-    exclude: ['77ダクト', 'スリムダクト', '90ダクト'] 
+    exclude: ['77ダクト', '90ダクト'] 
   },
   { 
     key: 'ジョイント', 
