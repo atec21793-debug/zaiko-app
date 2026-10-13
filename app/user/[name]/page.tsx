@@ -38,18 +38,6 @@ const CATEGORIES = [
     exclude: ['L頭', '77頭', '頭W(後付)'] 
   },
   { 
-    key: '90サイズ', 
-    label: '90サイズ', 
-    matchName: '90', 
-    exclude: ['立面90K', '90I', '90K', '90G', '90W','90B'] 
-  },
-  { 
-    key: '77サイズ', 
-    label: '77サイズ', 
-    matchName: '77', 
-    exclude: [] 
-  },
-  { 
     key: '45', 
     label: '45', 
     matchName: '45', 
@@ -256,17 +244,9 @@ export default function PersonalInventoryPage() {
       return 'その他パーツ';
     }
 
-    // 4. 77サイズカテゴリー
-    if (name.includes('77')) {
-      return '77サイズ';
-    }
+    // （※ 77や90を含むものはここで引っかからないため、下のダクト等の除外設定、または「その他」に流れます）
 
-    // 5. 90サイズカテゴリー
-    if (name.includes('90')) {
-      return '90サイズ';
-    }
-
-    // 6. その他の既存カテゴリチェック
+    // 4. その他の既存カテゴリチェック
     for (const cat of CATEGORIES) {
       if (cat.matchName && name.includes(cat.matchName)) {
         const isExcluded = cat.exclude.some((ex) => name.includes(ex));
