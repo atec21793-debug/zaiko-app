@@ -261,6 +261,12 @@ export default function SummaryPage() {
         if (selectedMonth && itemMonthStr !== selectedMonth) return false;
         if (item.user_name !== selectedUserForDetail) return false;
 
+        // 【追加】「調整」に関するタイプを除外する
+        const itemType = String(item.type || '');
+        if (itemType.includes('調整')) {
+          return false;
+        }
+
         if (searchStore.trim() !== '') {
           const storeName = String(item.store_name || item.store || '');
           const matchStore = storeName.toLowerCase().includes(searchStore.trim().toLowerCase());
