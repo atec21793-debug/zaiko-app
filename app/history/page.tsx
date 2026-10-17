@@ -205,7 +205,11 @@ export default function HistoryPage() {
       const isZero = unitPrice === 0 || totalAmount === 0;
 
       if (activeTab === 'zero') {
-        // 「単価0」タブ表示時は単価・金額が0円のデータのみ抽出
+        // 【修正】「出庫」以外のタイプ（消費、入庫、調整など）はすべて除外する
+        if (item.type !== '出庫') {
+          return false;
+        }
+        // 単価または金額が0円のものに絞る
         if (!isZero) return false;
       } else if (activeTab !== 'all' && item.type !== activeTab) {
         return false;
