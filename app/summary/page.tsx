@@ -160,7 +160,7 @@ export default function SummaryPage() {
     }
   };
 
-  // 購入合計: 手動購入データの合計(全店舗) + 履歴(history)の「カパス」の「入庫」のみ
+  // 購入合計: 手動購入データの合計(全店舗) + 履歴(history)の「カパス」の「入庫」のみ（商品マスタ単価も自動参照）
   const totalPurchaseAmount = useMemo(() => {
     // 1. 手動購入データ (material_purchases) の合計
     const manualSum = purchases
@@ -200,6 +200,7 @@ export default function SummaryPage() {
         let amount = 0;
         const qty = Number(item.quantity || 1);
 
+        // 優先順位: 1.履歴自体の合計金額 -> 2.履歴自体の単価×数量 -> 3.商品マスタの単価×数量
         if (item.total_amount !== undefined && item.total_amount !== null && Number(item.total_amount) > 0) {
           amount = Number(item.total_amount);
         } else if (item.unit_price !== undefined && item.unit_price !== null && Number(item.unit_price) > 0) {
@@ -576,8 +577,8 @@ export default function SummaryPage() {
                 </div>
                 <div className="space-y-2">
                   {purchases.map((item) => (
-                    <div key={item.id} className="flex items-center justify-end bg-white p-3 rounded-xl border border-gray-200 text-xs shadow-xs">
-                      <div className="flex-1 space-y-0.5">
+                    <div key={item.id} className="flex items-center justify-between bg-white p-3 rounded-xl border border-gray-200 text-xs shadow-xs">
+                      <div className="space-y-0.5">
                         <div className="text-[10px] text-gray-500 font-bold">{item.date} ／ 店舗: <span className="text-indigo-600">{item.store}</span></div>
                         <div className="font-black text-gray-900 text-sm">¥{Number(item.amount).toLocaleString()}</div>
                       </div>
