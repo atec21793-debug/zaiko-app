@@ -11,6 +11,7 @@ type Product = {
   unit_price?: number;
   price?: number;
   cost?: number;
+  unitPrice?: number;
 };
 
 export default function InboundPage() {
@@ -129,9 +130,9 @@ export default function InboundPage() {
     const targetDate = new Date(inboundDate);
     targetDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
 
-    // 商品マスタから単価・金額を事前に取得
+    // 商品マスタから単価・金額を事前に取得（どのプロパティ名でも確実に取得できるように修正）
     const matchedProd = productsList.find((p) => p.barcode === barcode);
-    const unitPrice = Number(matchedProd?.unit_price || matchedProd?.price || matchedProd?.cost || 0);
+    const unitPrice = Number(matchedProd?.unit_price ?? matchedProd?.price ?? matchedProd?.cost ?? matchedProd?.unitPrice ?? 0);
     const totalAmount = unitPrice * qtyNum;
 
     // 1. 履歴追加（単価と合計金額をセットして保存）

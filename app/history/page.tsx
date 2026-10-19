@@ -40,7 +40,8 @@ export default function HistoryPage() {
     const map: { [barcode: string]: { name: string; unit_price?: number } } = {};
     if (prodData) {
       prodData.forEach((p) => {
-        map[p.barcode] = { name: p.name, unit_price: p.unit_price };
+        const resolvedPrice = Number(p.unit_price ?? p.price ?? p.cost ?? p.unitPrice ?? 0);
+        map[p.barcode] = { name: p.name, unit_price: resolvedPrice };
       });
     }
     setProductMap(map);
@@ -159,7 +160,6 @@ export default function HistoryPage() {
       return;
     }
 
-    // 入庫、出庫、在庫調整のいずれでも金額を再計算する
     const newTotalAmount = newUnitPrice * newQuantity;
 
     const updatePayload: any = {
@@ -197,9 +197,15 @@ export default function HistoryPage() {
 
   const filteredHistory = useMemo(() => {
     return historyList.filter((item) => {
-      // 単価・金額が0円かどうかの判定
-      const unitPrice = item.unit_price !== undefined && item.unit_price !== null ? Number(item.unit_price) : 0;
-      const totalAmount = item.total_amount !== undefined && item.total_amount !== null ? Number(item.total_amount) : (unitPrice * item.quantity);
+      // 単価・金額の解決（履歴に無い場合は商品マスタから自動参照）
+      const histTotal = Number(item.total_amount);
+      const histUnit = Number(item.unit_price);
+      const prod = productMap[item.barcode];
+      const prodPrice = Number(prod?.unit_price || 0);
+
+      const unitPrice = !isNaN(histUnit) && histUnit > 0 ? histUnit : prodPrice;
+      const totalAmount = !isNaN(histTotal) && histTotal > 0 ? histTotal : (unitPrice * item.quantity);
+      
       const isZero = unitPrice === 0 || totalAmount === 0;
 
       if (activeTab === 'zero') {
@@ -330,8 +336,14 @@ export default function HistoryPage() {
             const prodInfo = productMap[item.barcode];
             const productName = prodInfo ? prodInfo.name : `(未登録: ${item.barcode})`;
             
-            const unitPrice = item.unit_price !== undefined && item.unit_price !== null ? Number(item.unit_price) : 0;
-            const totalAmount = item.total_amount !== undefined && item.total_amount !== null ? Number(item.total_amount) : (unitPrice * item.quantity);
+            // 単価・金額の解決（履歴に無い場合は商品マスタから自動参照）
+            const histTotal = Number(item.total_amount);
+            const histUnit = Number(item.unit_price);
+            const prodPrice = Number(prodInfo?.unit_price || 0);
+
+            const unitPrice = !isNaN(histUnit) && histUnit > 0 ? histUnit : prodPrice;
+            const totalAmount = !isNaN(histTotal) && histTotal > 0 ? histTotal : (unitPrice * item.quantity);
+
             const isEditing = editingId === item.id;
 
             const borderClass = 
@@ -389,7 +401,7 @@ export default function HistoryPage() {
                       </div>
                     </div>
 
-                    {/* 入庫・出庫・在庫調整のいずれでも金額を表示するよう修正 */}
+                    {/* 入庫を含めてすべての履歴で金額を表示 */}
                     <div className="mt-1 pt-2 border-t border-gray-100 text-xs font-bold text-gray-700">
                       金額: ¥{totalAmount.toLocaleString()} (単価: ¥{unitPrice.toLocaleString()})
                     </div>
@@ -426,7 +438,6 @@ export default function HistoryPage() {
                       </div>
                     </div>
 
-                    {/* 入庫・出庫・在庫調整のいずれでも単価を編集できるように修正 */}
                     <div>
                       <label className="block text-[10px] font-bold text-gray-600 mb-0.5">単価</label>
                       <input
