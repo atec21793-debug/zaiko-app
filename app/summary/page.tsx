@@ -149,18 +149,24 @@ export default function SummaryPage() {
   // 日付文字列から "YYYY-MM" を抽出する共通処理
   const getMonthStr = (dateStr: string) => {
     if (!dateStr) return '';
-    const norm = String(dateStr).replace(/\//g, '-');
-    return norm.substring(0, 7);
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return String(dateStr).replace(/\//g, '-').substring(0, 7);
+      const jstDate = new Date(date.getTime() + (9 * 60 * 60 * 1000));
+      return jstDate.toISOString().substring(0, 7);
+    } catch (e) {
+      const norm = String(dateStr).replace(/\//g, '-');
+      return norm.substring(0, 7);
+    }
   };
 
-  // 購入合計: 手動購入データの合計(全店舗) + 履歴(history)の「カパス入庫」のみ
+  // 購入合計: 手動購入データの合計(全店舗) + 履歴(history)の「カパス」の「入庫」のみ
   const totalPurchaseAmount = useMemo(() => {
     // 1. 手動購入データ (material_purchases) の合計
     const manualSum = purchases
       .filter((item) => {
         if (!item.date) return false;
         const itemMonthStr = getMonthStr(item.date);
-        // 選択された月がある場合は一致するものだけ
         if (selectedMonth && itemMonthStr !== selectedMonth) return false;
         return true;
       })
@@ -169,18 +175,24 @@ export default function SummaryPage() {
     // 2. 履歴データ (historyList) のうち「カパス」の「入庫」の合計
     const kapasInboundSum = historyList
       .filter((item) => {
-        // 入庫判定
-        const itemType = String(item.type || '');
-        const isInbound = itemType.includes('入庫') || itemType.includes('購入') || itemType.includes('仕入');
-        if (!isInbound) return false;
-
-        // 店舗判定（店舗名に「カパス」が含まれるか）
-        const storeName = String(item.store_name || item.store || item.memo || '');
-        if (!storeName.includes('カパス')) return false;
-
         // 月判定
         const itemMonthStr = getMonthStr(item.created_at);
         if (selectedMonth && itemMonthStr !== selectedMonth) return false;
+
+        // 入庫判定
+        const itemType = String(item.type || '');
+        const isInbound = 
+          itemType.includes('入庫') || 
+          itemType.includes('購入') || 
+          itemType.includes('仕入') || 
+          itemType.toLowerCase().includes('in');
+
+        if (!isInbound) return false;
+
+        // 店舗判定
+        const storeName = String(item.store_name || item.store || item.memo || '');
+        const isKapas = storeName.includes('カパス');
+        if (!isKapas) return false;
 
         return true;
       })
@@ -261,7 +273,6 @@ export default function SummaryPage() {
         if (selectedMonth && itemMonthStr !== selectedMonth) return false;
         if (item.user_name !== selectedUserForDetail) return false;
 
-        // 【追加】「調整」に関するタイプを除外する
         const itemType = String(item.type || '');
         if (itemType.includes('調整')) {
           return false;
@@ -565,8 +576,8 @@ export default function SummaryPage() {
                 </div>
                 <div className="space-y-2">
                   {purchases.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between bg-white p-3 rounded-xl border border-gray-200 text-xs shadow-xs">
-                      <div className="space-y-0.5">
+                    <div key={item.id} className="flex items-center justify-end bg-white p-3 rounded-xl border border-gray-200 text-xs shadow-xs">
+                      <div className="flex-1 space-y-0.5">
                         <div className="text-[10px] text-gray-500 font-bold">{item.date} ／ 店舗: <span className="text-indigo-600">{item.store}</span></div>
                         <div className="font-black text-gray-900 text-sm">¥{Number(item.amount).toLocaleString()}</div>
                       </div>
