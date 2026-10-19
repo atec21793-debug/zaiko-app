@@ -40,7 +40,8 @@ export default function HistoryPage() {
     const map: { [barcode: string]: { name: string; unit_price?: number } } = {};
     if (prodData) {
       prodData.forEach((p) => {
-        map[p.barcode] = { name: p.name, unit_price: p.unit_price };
+        const resolvedPrice = Number(p.unit_price ?? p.price ?? p.cost ?? p.unitPrice ?? 0);
+        map[p.barcode] = { name: p.name, unit_price: resolvedPrice };
       });
     }
     setProductMap(map);
@@ -159,10 +160,7 @@ export default function HistoryPage() {
       return;
     }
 
-    // 出庫および在庫調整のときにも金額を計算する
-    const newTotalAmount = (item.type === '出庫' || item.type === '在庫調整') 
-      ? newUnitPrice * newQuantity 
-      : (item.total_amount || 0);
+    const newTotalAmount = newUnitPrice * newQuantity;
 
     const updatePayload: any = {
       quantity: newQuantity,
@@ -199,17 +197,21 @@ export default function HistoryPage() {
 
   const filteredHistory = useMemo(() => {
     return historyList.filter((item) => {
-      // 単価・金額が0円かどうかの判定
-      const unitPrice = item.unit_price !== undefined && item.unit_price !== null ? Number(item.unit_price) : 0;
-      const totalAmount = item.total_amount !== undefined && item.total_amount !== null ? Number(item.total_amount) : (unitPrice * item.quantity);
+      // 単価・金額の解決（履歴に無い場合は商品マスタから自動参照）
+      const histTotal = Number(item.total_amount);
+      const histUnit = Number(item.unit_price);
+      const prod = productMap[item.barcode];
+      const prodPrice = Number(prod?.unit_price || 0);
+
+      const unitPrice = !isNaN(histUnit) && histUnit > 0 ? histUnit : prodPrice;
+      const totalAmount = !isNaN(histTotal) && histTotal > 0 ? histTotal : (unitPrice * item.quantity);
+      
       const isZero = unitPrice === 0 || totalAmount === 0;
 
       if (activeTab === 'zero') {
-        // 【修正】「出庫」以外のタイプ（消費、入庫、調整など）はすべて除外する
         if (item.type !== '出庫') {
           return false;
         }
-        // 単価または金額が0円のものに絞る
         if (!isZero) return false;
       } else if (activeTab !== 'all' && item.type !== activeTab) {
         return false;
@@ -334,8 +336,14 @@ export default function HistoryPage() {
             const prodInfo = productMap[item.barcode];
             const productName = prodInfo ? prodInfo.name : `(未登録: ${item.barcode})`;
             
-            const unitPrice = item.unit_price !== undefined && item.unit_price !== null ? Number(item.unit_price) : 0;
-            const totalAmount = item.total_amount !== undefined && item.total_amount !== null ? Number(item.total_amount) : (unitPrice * item.quantity);
+            // 単価・金額の解決（履歴に無い場合は商品マスタから自動参照）
+            const histTotal = Number(item.total_amount);
+            const histUnit = Number(item.unit_price);
+            const prodPrice = Number(prodInfo?.unit_price || 0);
+
+            const unitPrice = !isNaN(histUnit) && histUnit > 0 ? histUnit : prodPrice;
+            const totalAmount = !isNaN(histTotal) && histTotal > 0 ? histTotal : (unitPrice * item.quantity);
+
             const isEditing = editingId === item.id;
 
             const borderClass = 
@@ -393,11 +401,10 @@ export default function HistoryPage() {
                       </div>
                     </div>
 
-                    {(item.type === '出庫' || item.type === '在庫調整') && (
-                      <div className="mt-1 pt-2 border-t border-gray-100 text-xs font-bold text-gray-700">
-                        金額: ¥{totalAmount.toLocaleString()} (単価: ¥{unitPrice.toLocaleString()})
-                      </div>
-                    )}
+                    {/* 入庫を含めてすべての履歴で金額を表示 */}
+                    <div className="mt-1 pt-2 border-t border-gray-100 text-xs font-bold text-gray-700">
+                      金額: ¥{totalAmount.toLocaleString()} (単価: ¥{unitPrice.toLocaleString()})
+                    </div>
                   </>
                 ) : (
                   <div className="flex flex-col gap-2 bg-gray-50 p-3 rounded-lg border mt-1">
@@ -431,18 +438,16 @@ export default function HistoryPage() {
                       </div>
                     </div>
 
-                    {(item.type === '出庫' || item.type === '在庫調整') && (
-                      <div>
-                        <label className="block text-[10px] font-bold text-gray-600 mb-0.5">単価</label>
-                        <input
-                          type="number"
-                          value={editUnitPrice}
-                          onChange={(e) => setEditUnitPrice(Number(e.target.value))}
-                          className="w-full p-1.5 border rounded text-xs bg-white font-bold text-orange-700"
-                          min="0"
-                        />
-                      </div>
-                    )}
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-600 mb-0.5">単価</label>
+                      <input
+                        type="number"
+                        value={editUnitPrice}
+                        onChange={(e) => setEditUnitPrice(Number(e.target.value))}
+                        className="w-full p-1.5 border rounded text-xs bg-white font-bold text-orange-700"
+                        min="0"
+                      />
+                    </div>
 
                     <div className="flex justify-end gap-2 pt-2">
                       <button

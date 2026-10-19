@@ -8,30 +8,23 @@ type Product = {
   barcode: string;
   name: string;
   model_number: string;
-  unit_price?: number;
-  price?: number;
-  cost?: number;
 };
 
 export default function InboundPage() {
   const [barcode, setBarcode] = useState('');
   const [productName, setProductName] = useState('');
   const [storeName, setStoreName] = useState('カパス');
-  const [quantity, setQuantity] = useState<number | ''>(''); // 初期値を空欄に変更
+  const [quantity, setQuantity] = useState<number | ''>('');
 
-  // 今日の日付を YYYY-MM-DD 形式で取得
   const todayStr = new Date().toISOString().substring(0, 10);
-  const [inboundDate, setInboundDate] = useState(todayStr); // 入庫日用のステート
+  const [inboundDate, setInboundDate] = useState(todayStr);
 
   const [isScanning, setIsScanning] = useState(false);
   const scannedRef = useRef(false);
 
-  // 登録済み材料のリストを保持するステート
   const [productsList, setProductsList] = useState<Product[]>([]);
-
   const stores = ['カパス', '松尾', 'ロイヤル', '電材センター', 'プロストック', 'コーナン', '建デポ', 'ビバホーム', '港屋', 'コメリ', 'その他'];
 
-  // ページ読み込み時に材料マスタを全件取得
   useEffect(() => {
     fetchProducts();
   }, []);
@@ -65,7 +58,6 @@ export default function InboundPage() {
     setTimeout(() => { scannedRef.current = false; }, 500);
   };
 
-  // ドロップダウンで材料が選択されたときの処理
   const handleSelectProduct = (selectedBarcode: string) => {
     if (!selectedBarcode) {
       setBarcode('');
@@ -79,23 +71,20 @@ export default function InboundPage() {
     }
   };
 
-  // スリムダクトを除外しつつ、型番を条件に各カテゴリに商品を振り分ける
   const categorizedProducts = useMemo(() => {
     const validProducts = productsList.filter(p => !p.name.includes('スリムダクト'));
-
     const groups = {
-      head: [] as Product[],      // 頭（L頭は除く）
-      lHead: [] as Product[],     // L頭
-      duct: [] as Product[],     // ダクト（型番が LD- から始まるもの）
-      deg90: [] as Product[],    // 90（型番が LDK- から始まるもの）
-      deg45: [] as Product[],    // 45
-      joint: [] as Product[],    // ジョイント
-      others: [] as Product[],   // その他
+      head: [] as Product[],
+      lHead: [] as Product[],
+      duct: [] as Product[],
+      deg90: [] as Product[],
+      deg45: [] as Product[],
+      joint: [] as Product[],
+      others: [] as Product[],
     };
 
     validProducts.forEach(p => {
       const model = p.model_number || '';
-
       if (p.name.includes('L頭')) {
         groups.lHead.push(p);
       } else if (p.name.includes('頭')) {
@@ -124,17 +113,22 @@ export default function InboundPage() {
       return;
     }
 
-    // 選択された日付に現在の時間を付与して保存
     const now = new Date();
     const targetDate = new Date(inboundDate);
     targetDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
 
-    // 商品マスタから単価・金額を事前に取得
-    const matchedProd = productsList.find((p) => p.barcode === barcode);
-    const unitPrice = Number(matchedProd?.unit_price || matchedProd?.price || matchedProd?.cost || 0);
+    // unit_prices から選択された店舗の単価を自動取得
+    const { data: priceData } = await supabase
+      .from('unit_prices')
+      .select('price')
+      .eq('barcode', barcode)
+      .eq('store_name', storeName)
+      .maybeSingle();
+
+    const unitPrice = Number(priceData?.price || 0);
     const totalAmount = unitPrice * qtyNum;
 
-    // 1. 履歴追加（単価と合計金額をセットして保存）
+    // 1. 履歴追加
     const { error: histErr } = await supabase.from('history').insert({
       barcode,
       store_name: storeName,
@@ -176,7 +170,7 @@ export default function InboundPage() {
     setBarcode('');
     setProductName('');
     setQuantity('');
-    setInboundDate(new Date().toISOString().substring(0, 10)); // 日付を今日にリセット
+    setInboundDate(new Date().toISOString().substring(0, 10));
   };
 
   return (
@@ -232,7 +226,6 @@ export default function InboundPage() {
           </select>
         </div>
 
-        {/* 1つのドロップダウンにカテゴリグループ化を適用 */}
         <div>
           <label className="block text-xs font-bold text-gray-600 mb-1">登録済み材料から選択</label>
           <select
