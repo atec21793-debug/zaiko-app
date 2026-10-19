@@ -61,7 +61,9 @@ export default function SummaryPage() {
     const map: { [barcode: string]: { name: string; price?: number } } = {};
     if (prodData) {
       prodData.forEach((p) => {
-        map[p.barcode] = { name: p.name, price: Number(p.unit_price || p.price || p.cost || 0) };
+        // あらゆる価格関連のカラム名に対応
+        const resolvedPrice = Number(p.unit_price ?? p.price ?? p.cost ?? p.unitPrice ?? 0);
+        map[p.barcode] = { name: p.name, price: resolvedPrice };
       });
     }
     setProductMap(map);
@@ -201,14 +203,17 @@ export default function SummaryPage() {
         const qty = Number(item.quantity || 1);
 
         // 優先順位: 1.履歴自体の合計金額 -> 2.履歴自体の単価×数量 -> 3.商品マスタの単価×数量
-        if (item.total_amount !== undefined && item.total_amount !== null && Number(item.total_amount) > 0) {
-          amount = Number(item.total_amount);
-        } else if (item.unit_price !== undefined && item.unit_price !== null && Number(item.unit_price) > 0) {
-          amount = Number(item.unit_price) * qty;
-        } else {
-          const prod = productMap[item.barcode];
-          const unitPrice = prod?.price || 0;
-          amount = unitPrice * qty;
+        const histTotal = Number(item.total_amount);
+        const histUnit = Number(item.unit_price);
+        const prod = productMap[item.barcode];
+        const prodPrice = Number(prod?.price || 0);
+
+        if (!isNaN(histTotal) && histTotal > 0) {
+          amount = histTotal;
+        } else if (!isNaN(histUnit) && histUnit > 0) {
+          amount = histUnit * qty;
+        } else if (prodPrice > 0) {
+          amount = prodPrice * qty;
         }
 
         return sum + amount;
@@ -245,14 +250,17 @@ export default function SummaryPage() {
         let amount = 0;
         const qty = Number(item.quantity || 1);
 
-        if (item.total_amount !== undefined && item.total_amount !== null && Number(item.total_amount) > 0) {
-          amount = Number(item.total_amount);
-        } else if (item.unit_price !== undefined && item.unit_price !== null && Number(item.unit_price) > 0) {
-          amount = Number(item.unit_price) * qty;
-        } else {
-          const prod = productMap[item.barcode];
-          const unitPrice = prod?.price || 0;
-          amount = unitPrice * qty;
+        const histTotal = Number(item.total_amount);
+        const histUnit = Number(item.unit_price);
+        const prod = productMap[item.barcode];
+        const prodPrice = Number(prod?.price || 0);
+
+        if (!isNaN(histTotal) && histTotal > 0) {
+          amount = histTotal;
+        } else if (!isNaN(histUnit) && histUnit > 0) {
+          amount = histUnit * qty;
+        } else if (prodPrice > 0) {
+          amount = prodPrice * qty;
         }
 
         const uName = item.user_name;
@@ -294,13 +302,16 @@ export default function SummaryPage() {
         let amount = 0;
         const qty = Number(item.quantity || 1);
 
-        if (item.total_amount !== undefined && item.total_amount !== null && Number(item.total_amount) > 0) {
-          amount = Number(item.total_amount);
-        } else if (item.unit_price !== undefined && item.unit_price !== null && Number(item.unit_price) > 0) {
-          amount = Number(item.unit_price) * qty;
-        } else {
-          const unitPrice = prodInfo?.price || 0;
-          amount = unitPrice * qty;
+        const histTotal = Number(item.total_amount);
+        const histUnit = Number(item.unit_price);
+        const prodPrice = Number(prodInfo?.price || 0);
+
+        if (!isNaN(histTotal) && histTotal > 0) {
+          amount = histTotal;
+        } else if (!isNaN(histUnit) && histUnit > 0) {
+          amount = histUnit * qty;
+        } else if (prodPrice > 0) {
+          amount = prodPrice * qty;
         }
 
         const key = `${name}_${item.type}`;
@@ -343,13 +354,16 @@ export default function SummaryPage() {
         let amount = 0;
         const qty = Number(item.quantity || 1);
 
-        if (item.total_amount !== undefined && item.total_amount !== null && Number(item.total_amount) > 0) {
-          amount = Number(item.total_amount);
-        } else if (item.unit_price !== undefined && item.unit_price !== null && Number(item.unit_price) > 0) {
-          amount = Number(item.unit_price) * qty;
-        } else {
-          const unitPrice = prodInfo?.price || 0;
-          amount = unitPrice * qty;
+        const histTotal = Number(item.total_amount);
+        const histUnit = Number(item.unit_price);
+        const prodPrice = Number(prodInfo?.price || 0);
+
+        if (!isNaN(histTotal) && histTotal > 0) {
+          amount = histTotal;
+        } else if (!isNaN(histUnit) && histUnit > 0) {
+          amount = histUnit * qty;
+        } else if (prodPrice > 0) {
+          amount = prodPrice * qty;
         }
 
         const itemType = String(item.type || '');
