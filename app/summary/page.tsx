@@ -27,7 +27,8 @@ export type MaterialPurchase = {
 
 export default function SummaryPage() {
   const [historyList, setHistoryList] = useState<any[]>([]);
-  const [productMap, setProductMap] = useState<{ [barcode: string]: { name: string; price?: number } }>({});
+  const [productMap, setProductMap] = useState<{ [barcode: string]: { name: string } }>({});
+  const [unitPriceMap, setUnitPriceMap] = useState<{ [key: string]: number }>({}); // store_barcode ごとの単価マップ
   const [loading, setLoading] = useState(true);
 
   // 今月の年月を YYYY-MM 形式で取得
@@ -56,19 +57,29 @@ export default function SummaryPage() {
   const fetchData = async () => {
     setLoading(true);
     
-    // 製品マスタ取得
+    // 1. 製品マスタ取得
     const { data: prodData } = await supabase.from('products').select('*');
-    const map: { [barcode: string]: { name: string; price?: number } } = {};
+    const map: { [barcode: string]: { name: string } } = {};
     if (prodData) {
       prodData.forEach((p) => {
-        // あらゆる価格関連のカラム名に対応
-        const resolvedPrice = Number(p.unit_price ?? p.price ?? p.cost ?? p.unitPrice ?? 0);
-        map[p.barcode] = { name: p.name, price: resolvedPrice };
+        map[p.barcode] = { name: p.name };
       });
     }
     setProductMap(map);
 
-    // 材料購入データ取得
+    // 2. 店舗別単価 (unit_prices) 取得
+    const { data: priceData } = await supabase.from('unit_prices').select('*');
+    const priceMap: { [key: string]: number } = {};
+    if (priceData) {
+      priceData.forEach((up) => {
+        // キーを `${store_name}_${barcode}` にして保持
+        const key = `${up.store_name}_${up.barcode}`;
+        priceMap[key] = Number(up.price || 0);
+      });
+    }
+    setUnitPriceMap(priceMap);
+
+    // 3. 材料購入データ取得
     const { data: purchaseData } = await supabase
       .from('material_purchases')
       .select('*')
@@ -77,7 +88,7 @@ export default function SummaryPage() {
       setPurchases(purchaseData);
     }
 
-    // 履歴を全件取得
+    // 4. 履歴を全件取得
     let allHistory: any[] = [];
     let page = 0;
     const pageSize = 1000;
@@ -148,6 +159,23 @@ export default function SummaryPage() {
     }
   };
 
+  // 金額を計算する共通関数（履歴アイテムとストア名から unit_prices を引く）
+  const calculateItemAmount = (item: any) => {
+    const histTotal = Number(item.total_amount);
+    const histUnit = Number(item.unit_price);
+    const qty = Number(item.quantity || 1);
+
+    if (!isNaN(histTotal) && histTotal > 0) return histTotal;
+    if (!isNaN(histUnit) && histUnit > 0) return histUnit * qty;
+
+    // unit_prices から店舗×バーコードの単価を引く
+    const store = item.store_name || item.store || '';
+    const priceKey = `${store}_${item.barcode}`;
+    const storePrice = unitPriceMap[priceKey] || 0;
+
+    return storePrice * qty;
+  };
+
   // 日付文字列から "YYYY-MM" を抽出する共通処理
   const getMonthStr = (dateStr: string) => {
     if (!dateStr) return '';
@@ -162,9 +190,8 @@ export default function SummaryPage() {
     }
   };
 
-  // 購入合計: 手動購入データの合計(全店舗) + 履歴(history)の「カパス」の「入庫」のみ（商品マスタ単価も自動参照）
+  // 購入合計: 手動購入データの合計(全店舗) + 履歴(history)の「カパス」の「入庫」のみ
   const totalPurchaseAmount = useMemo(() => {
-    // 1. 手動購入データ (material_purchases) の合計
     const manualSum = purchases
       .filter((item) => {
         if (!item.date) return false;
@@ -174,14 +201,11 @@ export default function SummaryPage() {
       })
       .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
 
-    // 2. 履歴データ (historyList) のうち「カパス」の「入庫」の合計
     const kapasInboundSum = historyList
       .filter((item) => {
-        // 月判定
         const itemMonthStr = getMonthStr(item.created_at);
         if (selectedMonth && itemMonthStr !== selectedMonth) return false;
 
-        // 入庫判定
         const itemType = String(item.type || '');
         const isInbound = 
           itemType.includes('入庫') || 
@@ -191,37 +215,15 @@ export default function SummaryPage() {
 
         if (!isInbound) return false;
 
-        // 店舗判定
         const storeName = String(item.store_name || item.store || item.memo || '');
-        const isKapas = storeName.includes('カパス');
-        if (!isKapas) return false;
+        if (!storeName.includes('カパス')) return false;
 
         return true;
       })
-      .reduce((sum, item) => {
-        let amount = 0;
-        const qty = Number(item.quantity || 1);
+      .reduce((sum, item) => sum + calculateItemAmount(item), 0);
 
-        // 優先順位: 1.履歴自体の合計金額 -> 2.履歴自体の単価×数量 -> 3.商品マスタの単価×数量
-        const histTotal = Number(item.total_amount);
-        const histUnit = Number(item.unit_price);
-        const prod = productMap[item.barcode];
-        const prodPrice = Number(prod?.price || 0);
-
-        if (!isNaN(histTotal) && histTotal > 0) {
-          amount = histTotal;
-        } else if (!isNaN(histUnit) && histUnit > 0) {
-          amount = histUnit * qty;
-        } else if (prodPrice > 0) {
-          amount = prodPrice * qty;
-        }
-
-        return sum + amount;
-      }, 0);
-
-    console.log('手動購入合計:', manualSum, 'カパス入庫合計:', kapasInboundSum);
     return manualSum + kapasInboundSum;
-  }, [purchases, historyList, selectedMonth, productMap]);
+  }, [purchases, historyList, selectedMonth, unitPriceMap]);
 
   // 担当別合計金額
   const userSummary = useMemo(() => {
@@ -235,41 +237,24 @@ export default function SummaryPage() {
       .filter((item) => {
         const itemMonthStr = getMonthStr(item.created_at);
         if (selectedMonth && itemMonthStr !== selectedMonth) return false;
-        
         if (!['天野', '佐々木', '宇治'].includes(item.user_name)) return false;
 
         if (searchStore.trim() !== '') {
           const storeName = String(item.store_name || item.store || '');
-          const matchStore = storeName.toLowerCase().includes(searchStore.trim().toLowerCase());
-          if (!matchStore) return false;
+          if (!storeName.toLowerCase().includes(searchStore.trim().toLowerCase())) return false;
         }
 
         return true;
       })
       .forEach((item) => {
-        let amount = 0;
-        const qty = Number(item.quantity || 1);
-
-        const histTotal = Number(item.total_amount);
-        const histUnit = Number(item.unit_price);
-        const prod = productMap[item.barcode];
-        const prodPrice = Number(prod?.price || 0);
-
-        if (!isNaN(histTotal) && histTotal > 0) {
-          amount = histTotal;
-        } else if (!isNaN(histUnit) && histUnit > 0) {
-          amount = histUnit * qty;
-        } else if (prodPrice > 0) {
-          amount = prodPrice * qty;
-        }
-
+        const amount = calculateItemAmount(item);
         const uName = item.user_name;
         if (summary[uName] !== undefined) {
           summary[uName] += amount;
         }
       });
     return summary;
-  }, [historyList, selectedMonth, searchStore, productMap]);
+  }, [historyList, selectedMonth, searchStore, unitPriceMap]);
 
   // 選択された担当者の内訳計算
   const selectedUserMaterials = useMemo(() => {
@@ -283,14 +268,11 @@ export default function SummaryPage() {
         if (item.user_name !== selectedUserForDetail) return false;
 
         const itemType = String(item.type || '');
-        if (itemType.includes('調整')) {
-          return false;
-        }
+        if (itemType.includes('調整')) return false;
 
         if (searchStore.trim() !== '') {
           const storeName = String(item.store_name || item.store || '');
-          const matchStore = storeName.toLowerCase().includes(searchStore.trim().toLowerCase());
-          if (!matchStore) return false;
+          if (!storeName.toLowerCase().includes(searchStore.trim().toLowerCase())) return false;
         }
 
         return true;
@@ -298,21 +280,7 @@ export default function SummaryPage() {
       .forEach((item) => {
         const prodInfo = productMap[item.barcode];
         const name = prodInfo ? prodInfo.name : `(未登録: ${item.barcode})`;
-
-        let amount = 0;
-        const qty = Number(item.quantity || 1);
-
-        const histTotal = Number(item.total_amount);
-        const histUnit = Number(item.unit_price);
-        const prodPrice = Number(prodInfo?.price || 0);
-
-        if (!isNaN(histTotal) && histTotal > 0) {
-          amount = histTotal;
-        } else if (!isNaN(histUnit) && histUnit > 0) {
-          amount = histUnit * qty;
-        } else if (prodPrice > 0) {
-          amount = prodPrice * qty;
-        }
+        const amount = calculateItemAmount(item);
 
         const key = `${name}_${item.type}`;
         if (!materialMap[key]) {
@@ -323,7 +291,7 @@ export default function SummaryPage() {
       });
 
     return Object.values(materialMap);
-  }, [historyList, selectedMonth, searchStore, selectedUserForDetail, productMap]);
+  }, [historyList, selectedMonth, searchStore, selectedUserForDetail, productMap, unitPriceMap]);
 
   // 材料ごとに入庫数・出庫数などを集計
   const summaryData = useMemo(() => {
@@ -336,8 +304,7 @@ export default function SummaryPage() {
 
         if (searchStore.trim() !== '') {
           const storeName = String(item.store_name || item.store || '');
-          const matchStore = storeName.toLowerCase().includes(searchStore.trim().toLowerCase());
-          if (!matchStore) return false;
+          if (!storeName.toLowerCase().includes(searchStore.trim().toLowerCase())) return false;
         }
 
         return true;
@@ -351,22 +318,9 @@ export default function SummaryPage() {
           map[barcode] = { name, inQty: 0, outQty: 0, outAmount: 0 };
         }
 
-        let amount = 0;
-        const qty = Number(item.quantity || 1);
-
-        const histTotal = Number(item.total_amount);
-        const histUnit = Number(item.unit_price);
-        const prodPrice = Number(prodInfo?.price || 0);
-
-        if (!isNaN(histTotal) && histTotal > 0) {
-          amount = histTotal;
-        } else if (!isNaN(histUnit) && histUnit > 0) {
-          amount = histUnit * qty;
-        } else if (prodPrice > 0) {
-          amount = prodPrice * qty;
-        }
-
+        const amount = calculateItemAmount(item);
         const itemType = String(item.type || '');
+        
         if (itemType.includes('入庫') || itemType.includes('購入') || itemType.includes('仕入')) {
           map[barcode].inQty += Number(item.quantity || 0);
         } else if (itemType.includes('出庫')) {
@@ -376,7 +330,7 @@ export default function SummaryPage() {
       });
 
     return Object.values(map);
-  }, [historyList, selectedMonth, searchStore, productMap]);
+  }, [historyList, selectedMonth, searchStore, productMap, unitPriceMap]);
 
   return (
     <main className="w-full max-w-full p-4 bg-gray-50 min-h-screen">
