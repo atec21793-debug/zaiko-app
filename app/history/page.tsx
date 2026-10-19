@@ -159,10 +159,8 @@ export default function HistoryPage() {
       return;
     }
 
-    // 出庫および在庫調整のときにも金額を計算する
-    const newTotalAmount = (item.type === '出庫' || item.type === '在庫調整') 
-      ? newUnitPrice * newQuantity 
-      : (item.total_amount || 0);
+    // 入庫、出庫、在庫調整のいずれでも金額を再計算する
+    const newTotalAmount = newUnitPrice * newQuantity;
 
     const updatePayload: any = {
       quantity: newQuantity,
@@ -205,11 +203,9 @@ export default function HistoryPage() {
       const isZero = unitPrice === 0 || totalAmount === 0;
 
       if (activeTab === 'zero') {
-        // 【修正】「出庫」以外のタイプ（消費、入庫、調整など）はすべて除外する
         if (item.type !== '出庫') {
           return false;
         }
-        // 単価または金額が0円のものに絞る
         if (!isZero) return false;
       } else if (activeTab !== 'all' && item.type !== activeTab) {
         return false;
@@ -393,11 +389,10 @@ export default function HistoryPage() {
                       </div>
                     </div>
 
-                    {(item.type === '出庫' || item.type === '在庫調整') && (
-                      <div className="mt-1 pt-2 border-t border-gray-100 text-xs font-bold text-gray-700">
-                        金額: ¥{totalAmount.toLocaleString()} (単価: ¥{unitPrice.toLocaleString()})
-                      </div>
-                    )}
+                    {/* 入庫・出庫・在庫調整のいずれでも金額を表示するよう修正 */}
+                    <div className="mt-1 pt-2 border-t border-gray-100 text-xs font-bold text-gray-700">
+                      金額: ¥{totalAmount.toLocaleString()} (単価: ¥{unitPrice.toLocaleString()})
+                    </div>
                   </>
                 ) : (
                   <div className="flex flex-col gap-2 bg-gray-50 p-3 rounded-lg border mt-1">
@@ -431,18 +426,17 @@ export default function HistoryPage() {
                       </div>
                     </div>
 
-                    {(item.type === '出庫' || item.type === '在庫調整') && (
-                      <div>
-                        <label className="block text-[10px] font-bold text-gray-600 mb-0.5">単価</label>
-                        <input
-                          type="number"
-                          value={editUnitPrice}
-                          onChange={(e) => setEditUnitPrice(Number(e.target.value))}
-                          className="w-full p-1.5 border rounded text-xs bg-white font-bold text-orange-700"
-                          min="0"
-                        />
-                      </div>
-                    )}
+                    {/* 入庫・出庫・在庫調整のいずれでも単価を編集できるように修正 */}
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-600 mb-0.5">単価</label>
+                      <input
+                        type="number"
+                        value={editUnitPrice}
+                        onChange={(e) => setEditUnitPrice(Number(e.target.value))}
+                        className="w-full p-1.5 border rounded text-xs bg-white font-bold text-orange-700"
+                        min="0"
+                      />
+                    </div>
 
                     <div className="flex justify-end gap-2 pt-2">
                       <button
