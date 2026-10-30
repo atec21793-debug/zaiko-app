@@ -72,7 +72,7 @@ export default function InboundPage() {
   };
 
   const categorizedProducts = useMemo(() => {
-    const validProducts = productsList.filter(p => !p.name.includes('スリムダクト'));
+    // スリムダクトの除外を解除し、全ての製品を対象にします
     const groups = {
       head: [] as Product[],
       lHead: [] as Product[],
@@ -83,7 +83,7 @@ export default function InboundPage() {
       others: [] as Product[],
     };
 
-    validProducts.forEach(p => {
+    productsList.forEach(p => {
       const model = p.model_number || '';
       if (p.name.includes('L頭')) {
         groups.lHead.push(p);
