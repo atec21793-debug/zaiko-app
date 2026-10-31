@@ -15,6 +15,7 @@ export default function InboundPage() {
   const [productName, setProductName] = useState('');
   const [storeName, setStoreName] = useState('カパス');
   const [quantity, setQuantity] = useState<number | ''>('');
+  const [unitPrice, setUnitPrice] = useState<number>(0); // 自動取得した単価を保持
 
   const todayStr = new Date().toISOString().substring(0, 10);
   const [inboundDate, setInboundDate] = useState(todayStr);
@@ -36,9 +37,26 @@ export default function InboundPage() {
     }
   };
 
-  const fetchProductInfo = async (code: string) => {
+  // 単価を自動取得する関数
+  const fetchPrice = async (code: string, store: string) => {
+    if (!code || !store) {
+      setUnitPrice(0);
+      return;
+    }
+    const { data: priceData } = await supabase
+      .from('unit_prices')
+      .select('price')
+      .eq('barcode', code)
+      .eq('store_name', store)
+      .maybeSingle();
+
+    setUnitPrice(Number(priceData?.price || 0));
+  };
+
+  const fetchProductInfo = async (code: string, currentStore = storeName) => {
     if (!code) {
       setProductName('');
+      setUnitPrice(0);
       return;
     }
     const { data: prod } = await supabase.from('products').select('*').eq('barcode', code).maybeSingle();
@@ -47,6 +65,7 @@ export default function InboundPage() {
     } else {
       setProductName('（未登録の材料・マスタで登録してください）');
     }
+    await fetchPrice(code, currentStore);
   };
 
   const onScanSuccess = (text: string) => {
@@ -54,7 +73,7 @@ export default function InboundPage() {
     scannedRef.current = true;
     setBarcode(text);
     setIsScanning(false);
-    fetchProductInfo(text);
+    fetchProductInfo(text, storeName);
     setTimeout(() => { scannedRef.current = false; }, 500);
   };
 
@@ -62,6 +81,7 @@ export default function InboundPage() {
     if (!selectedBarcode) {
       setBarcode('');
       setProductName('');
+      setUnitPrice(0);
       return;
     }
     setBarcode(selectedBarcode);
@@ -69,10 +89,10 @@ export default function InboundPage() {
     if (found) {
       setProductName(found.name);
     }
+    fetchPrice(selectedBarcode, storeName);
   };
 
   const categorizedProducts = useMemo(() => {
-    // スリムダクトの除外を解除し、全ての製品を対象にします
     const groups = {
       head: [] as Product[],
       lHead: [] as Product[],
@@ -117,15 +137,6 @@ export default function InboundPage() {
     const targetDate = new Date(inboundDate);
     targetDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
 
-    // unit_prices から選択された店舗の単価を自動取得
-    const { data: priceData } = await supabase
-      .from('unit_prices')
-      .select('price')
-      .eq('barcode', barcode)
-      .eq('store_name', storeName)
-      .maybeSingle();
-
-    const unitPrice = Number(priceData?.price || 0);
     const totalAmount = unitPrice * qtyNum;
 
     // 1. 履歴追加
@@ -170,6 +181,7 @@ export default function InboundPage() {
     setBarcode('');
     setProductName('');
     setQuantity('');
+    setUnitPrice(0);
     setInboundDate(new Date().toISOString().substring(0, 10));
   };
 
@@ -219,7 +231,11 @@ export default function InboundPage() {
           <label className="block text-xs font-bold text-gray-600 mb-1">対象店舗</label>
           <select
             value={storeName}
-            onChange={(e) => setStoreName(e.target.value)}
+            onChange={(e) => {
+              const newStore = e.target.value;
+              setStoreName(newStore);
+              fetchPrice(barcode, newStore);
+            }}
             className="w-full p-3 border rounded-lg bg-white text-base"
           >
             {stores.map((s) => (<option key={s} value={s}>{s}</option>))}
@@ -314,13 +330,20 @@ export default function InboundPage() {
             value={barcode}
             onChange={(e) => {
               setBarcode(e.target.value);
-              fetchProductInfo(e.target.value);
+              fetchProductInfo(e.target.value, storeName);
             }}
             required
             className="w-full p-3 border rounded-lg text-base bg-white"
             placeholder="バーコード入力"
           />
           <p className="text-xs font-bold text-gray-700 mt-1">{productName}</p>
+        </div>
+
+        <div>
+          <label className="block text-xs font-bold text-gray-600 mb-1">自動取得単価</label>
+          <div className="p-3 border rounded-lg bg-gray-100 text-base font-bold text-gray-700">
+            ¥{unitPrice.toLocaleString()}
+          </div>
         </div>
 
         <div>
